@@ -27,5 +27,6 @@ type Client interface {
 type ChatCompletions interface {
 	New(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
 	NewWithRetry(ctx context.Context, params openai.ChatCompletionNewParams, callback RetryCallback) error
+	NewWithRetryAndFallback(ctx context.Context, params openai.ChatCompletionNewParams, fallbackModel string, callback RetryCallback) error
 	NewStreaming(ctx context.Context, params openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk]
 }

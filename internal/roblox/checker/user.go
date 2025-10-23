@@ -21,11 +21,12 @@ import (
 
 // UserCheckerParams contains all the parameters needed for user checker processing.
 type UserCheckerParams struct {
-	Users                     []*types.ReviewUser `json:"users"`
-	InappropriateOutfitFlags  map[int64]struct{}  `json:"inappropriateOutfitFlags"`
-	InappropriateProfileFlags map[int64]struct{}  `json:"inappropriateProfileFlags"`
-	InappropriateFriendsFlags map[int64]struct{}  `json:"inappropriateFriendsFlags"`
-	InappropriateGroupsFlags  map[int64]struct{}  `json:"inappropriateGroupsFlags"`
+	Users                     []*types.ReviewUser         `json:"users"`
+	ExistingUsers             map[int64]*types.ReviewUser `json:"existingUsers"`
+	InappropriateOutfitFlags  map[int64]struct{}          `json:"inappropriateOutfitFlags"`
+	InappropriateProfileFlags map[int64]struct{}          `json:"inappropriateProfileFlags"`
+	InappropriateFriendsFlags map[int64]struct{}          `json:"inappropriateFriendsFlags"`
+	InappropriateGroupsFlags  map[int64]struct{}          `json:"inappropriateGroupsFlags"`
 }
 
 // UserChecker coordinates the checking process by combining results from
@@ -40,8 +41,8 @@ type UserChecker struct {
 	translator         *translator.Translator
 	userAnalyzer       *ai.UserAnalyzer
 	userReasonAnalyzer *ai.UserReasonAnalyzer
+	categoryAnalyzer   *ai.CategoryAnalyzer
 	outfitAnalyzer     *ai.OutfitAnalyzer
-	ivanAnalyzer       *ai.IvanAnalyzer
 	groupChecker       *GroupChecker
 	friendChecker      *FriendChecker
 	condoChecker       *CondoChecker
@@ -62,11 +63,11 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 		translator:         trans,
 		userAnalyzer:       ai.NewUserAnalyzer(app, trans, logger),
 		userReasonAnalyzer: ai.NewUserReasonAnalyzer(app, logger),
+		categoryAnalyzer:   ai.NewCategoryAnalyzer(app, logger),
 		outfitAnalyzer:     ai.NewOutfitAnalyzer(app, logger),
-		ivanAnalyzer:       ai.NewIvanAnalyzer(app, logger),
 		groupChecker:       NewGroupChecker(app, logger),
 		friendChecker:      NewFriendChecker(app, logger),
-		condoChecker:       NewCondoChecker(app.DB, logger),
+		condoChecker:       NewCondoChecker(app, logger),
 		logger:             logger.Named("user_checker"),
 	}
 }
@@ -86,8 +87,28 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 	// Initialize map to store reasons
 	reasonsMap := make(map[int64]types.Reasons[enum.UserReasonType])
 
+	// Preserve manually-added reasons from existing users before analysis
+	// This ensures moderator-added reasons (Chat, Favorites, Badges) are not lost during reprocessing
+	if params.ExistingUsers != nil {
+		for userID, existingUser := range params.ExistingUsers {
+			if existingUser.Reasons == nil {
+				continue
+			}
+
+			for reasonType, reason := range existingUser.Reasons {
+				if !enum.IsAutoAnalyzedReason(reasonType) {
+					if reasonsMap[userID] == nil {
+						reasonsMap[userID] = make(types.Reasons[enum.UserReasonType])
+					}
+
+					reasonsMap[userID][reasonType] = reason
+				}
+			}
+		}
+	}
+
 	// Create context with timeout
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 
 	// Prepare friend and group maps
@@ -117,6 +138,15 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		InappropriateGroupsFlags: params.InappropriateGroupsFlags,
 	})
 
+	// Process condo checker
+	if err := c.condoChecker.ProcessUsers(ctxWithTimeout, &CondoCheckerParams{
+		Users:              params.Users,
+		ReasonsMap:         reasonsMap,
+		ConfirmedGroupsMap: confirmedGroupsMap,
+	}); err != nil {
+		c.logger.Error("Failed to process condo checker", zap.Error(err))
+	}
+
 	// Prepare user info maps
 	translatedInfos, originalInfos := c.prepareUserInfoMaps(ctxWithTimeout, params.Users)
 
@@ -143,18 +173,36 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		)
 	}
 
-	// Process condo checker
-	c.condoChecker.ProcessUsers(ctxWithTimeout, &CondoCheckerParams{
-		Users:      params.Users,
-		ReasonsMap: reasonsMap,
-	})
-
 	// Process outfit analysis
-	flaggedOutfits := c.outfitAnalyzer.ProcessUsers(ctxWithTimeout, &ai.OutfitAnalyzerParams{
+	flaggedOutfits, furryUsers := c.outfitAnalyzer.ProcessUsers(ctxWithTimeout, &ai.OutfitAnalyzerParams{
 		Users:                    params.Users,
 		ReasonsMap:               reasonsMap,
 		InappropriateOutfitFlags: params.InappropriateOutfitFlags,
 	})
+
+	// Remove friend-only flags for furry users to prevent false positive cascade
+	c.removeFurryUserFriendOnlyFlags(reasonsMap, furryUsers)
+
+	// Detect past offenders - users who were previously flagged/confirmed but now have no violations
+	pastOffenderIDs := make([]int64, 0)
+
+	for _, user := range params.Users {
+		if _, hasReasons := reasonsMap[user.ID]; !hasReasons {
+			if existingUser, exists := params.ExistingUsers[user.ID]; exists {
+				if existingUser.Status == enum.UserTypeFlagged || existingUser.Status == enum.UserTypeConfirmed {
+					// User has no reasons after processing
+					// They were previously flagged/confirmed, they became clean (past offender)
+					pastOffenderIDs = append(pastOffenderIDs, user.ID)
+					c.logger.Info("User became clean, will update to past offender",
+						zap.Int64("userID", user.ID),
+						zap.String("previousStatus", existingUser.Status.String()))
+				}
+			}
+		}
+	}
+
+	// Update past offenders
+	c.handlePastOffenders(ctx, pastOffenderIDs)
 
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {
@@ -174,6 +222,7 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 
 	for _, user := range params.Users {
 		if reasons, ok := reasonsMap[user.ID]; ok {
+			// User has reasons and are flagged
 			user.Reasons = reasons
 			user.Confidence = utils.CalculateConfidence(reasons)
 			flaggedUsers[user.ID] = user
@@ -181,50 +230,19 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		}
 	}
 
+	// Classify flagged users into violation categories
+	c.classifyFlaggedUsers(ctxWithTimeout, flaggedUsers)
+
 	// Save flagged users to database
 	if err := c.db.Service().User().SaveUsers(ctx, flaggedUsers); err != nil {
 		c.logger.Error("Failed to save users", zap.Error(err))
 	}
 
-	// Identify users with high confidence scores for automatic confirmation
-	var usersToConfirm []*types.ReviewUser
-
-	for _, user := range flaggedUsers {
-		if c.meetsAutoConfirmationCriteria(user) {
-			usersToConfirm = append(usersToConfirm, user)
-			confirmedUsers[user.ID] = user
-			delete(flaggedUsers, user.ID)
-		}
-	}
-
-	// Automatically confirm users with confidence scores above 90% threshold
-	if len(usersToConfirm) > 0 {
-		if err := c.db.Service().User().ConfirmUsers(ctx, usersToConfirm, 0); err != nil {
-			c.logger.Error("Failed to auto-confirm high-confidence users",
-				zap.Int("count", len(usersToConfirm)),
-				zap.Error(err))
-		} else {
-			c.logger.Info("Auto-confirmed high-confidence users",
-				zap.Int("count", len(usersToConfirm)))
-		}
-	}
+	// Automatically confirm users with high confidence scores
+	c.autoConfirmHighConfidenceUsers(ctx, flaggedUsers, confirmedUsers)
 
 	// Synchronize user status to external D1 database for API access
-	if len(flaggedUsers) > 0 {
-		if err := c.cfClient.UserFlags.AddFlagged(ctx, flaggedUsers); err != nil {
-			c.logger.Error("Failed to add flagged users to D1", zap.Error(err))
-		}
-	}
-
-	if len(confirmedUsers) > 0 {
-		for _, user := range confirmedUsers {
-			if err := c.cfClient.UserFlags.AddConfirmed(ctx, user, 0); err != nil {
-				c.logger.Error("Failed to add auto-confirmed user to D1",
-					zap.Error(err),
-					zap.Int64("userID", user.ID))
-			}
-		}
-	}
+	c.syncFlaggedUsersToD1(ctx, flaggedUsers, confirmedUsers)
 
 	// Track flagged users' group memberships
 	go c.trackFlaggedUsersGroups(ctx, flaggedUsers)
@@ -329,6 +347,117 @@ func (c *UserChecker) prepareUserInfoMaps(
 	return translatedInfos, originalInfos
 }
 
+// removeFurryUserFriendOnlyFlags removes friend-only flags for furry users to prevent false positive cascade.
+func (c *UserChecker) removeFurryUserFriendOnlyFlags(
+	reasonsMap map[int64]types.Reasons[enum.UserReasonType], furryUsers map[int64]struct{},
+) {
+	for userID := range furryUsers {
+		if reasons, exists := reasonsMap[userID]; exists {
+			// Only remove if user has exactly one reason and it's friend-only
+			if len(reasons) == 1 {
+				if _, hasFriendReason := reasons[enum.UserReasonTypeFriend]; hasFriendReason {
+					delete(reasonsMap, userID)
+					c.logger.Info("Removed friend-only flag for furry user to prevent cascade",
+						zap.Int64("userID", userID))
+				}
+			}
+		}
+	}
+}
+
+// classifyFlaggedUsers classifies users into violation categories.
+func (c *UserChecker) classifyFlaggedUsers(ctx context.Context, flaggedUsers map[int64]*types.ReviewUser) {
+	if len(flaggedUsers) == 0 {
+		return
+	}
+
+	c.logger.Info("Classifying users into violation categories",
+		zap.Int("totalUsers", len(flaggedUsers)))
+
+	categoryResults := c.categoryAnalyzer.ClassifyUsers(ctx, flaggedUsers, 0)
+
+	// Apply categories to users
+	for userID, category := range categoryResults {
+		if user, exists := flaggedUsers[userID]; exists {
+			user.Category = category
+			c.logger.Debug("Assigned category to user",
+				zap.Int64("userID", userID),
+				zap.String("username", user.Name),
+				zap.String("category", category.String()))
+		}
+	}
+
+	c.logger.Info("Finished category classification",
+		zap.Int("classified", len(categoryResults)))
+}
+
+// handlePastOffenders updates users who became clean to past offender status.
+func (c *UserChecker) handlePastOffenders(ctx context.Context, pastOffenderIDs []int64) {
+	if len(pastOffenderIDs) == 0 {
+		return
+	}
+
+	if err := c.db.Service().User().UpdateToPastOffender(ctx, pastOffenderIDs); err != nil {
+		c.logger.Error("Failed to update users to past offender status", zap.Error(err))
+	} else {
+		c.logger.Info("Updated users to past offender status",
+			zap.Int("count", len(pastOffenderIDs)))
+	}
+
+	if err := c.cfClient.UserFlags.UpdateToPastOffender(ctx, pastOffenderIDs); err != nil {
+		c.logger.Error("Failed to update D1 users to past offender status", zap.Error(err))
+	}
+}
+
+// autoConfirmHighConfidenceUsers identifies and confirms users meeting auto-confirmation criteria.
+func (c *UserChecker) autoConfirmHighConfidenceUsers(
+	ctx context.Context, flaggedUsers, confirmedUsers map[int64]*types.ReviewUser,
+) {
+	var usersToConfirm []*types.ReviewUser
+
+	for _, user := range flaggedUsers {
+		if c.meetsAutoConfirmationCriteria(user) {
+			usersToConfirm = append(usersToConfirm, user)
+			confirmedUsers[user.ID] = user
+			delete(flaggedUsers, user.ID)
+		}
+	}
+
+	if len(usersToConfirm) == 0 {
+		return
+	}
+
+	if err := c.db.Service().User().ConfirmUsers(ctx, usersToConfirm, 0); err != nil {
+		c.logger.Error("Failed to auto-confirm high-confidence users",
+			zap.Int("count", len(usersToConfirm)),
+			zap.Error(err))
+	} else {
+		c.logger.Info("Auto-confirmed high-confidence users",
+			zap.Int("count", len(usersToConfirm)))
+	}
+}
+
+// syncFlaggedUsersToD1 synchronizes flagged and confirmed users to the D1 database for API access.
+func (c *UserChecker) syncFlaggedUsersToD1(
+	ctx context.Context, flaggedUsers map[int64]*types.ReviewUser, confirmedUsers map[int64]*types.ReviewUser,
+) {
+	if len(flaggedUsers) > 0 {
+		if err := c.cfClient.UserFlags.AddFlagged(ctx, flaggedUsers); err != nil {
+			c.logger.Error("Failed to add flagged users to D1", zap.Error(err))
+		}
+	}
+
+	if len(confirmedUsers) > 0 {
+		for _, user := range confirmedUsers {
+			if err := c.cfClient.UserFlags.AddConfirmed(ctx, user, 0); err != nil {
+				c.logger.Error("Failed to add auto-confirmed user to D1",
+					zap.Error(err),
+					zap.Int64("userID", user.ID))
+			}
+		}
+	}
+}
+
 // trackFlaggedUsersGroups adds flagged users' group memberships to tracking.
 func (c *UserChecker) trackFlaggedUsersGroups(ctx context.Context, flaggedUsers map[int64]*types.ReviewUser) {
 	groupUsersTracking := make(map[int64][]int64)
@@ -336,14 +465,15 @@ func (c *UserChecker) trackFlaggedUsersGroups(ctx context.Context, flaggedUsers 
 	// Collect group memberships for flagged users
 	for userID, user := range flaggedUsers {
 		for _, group := range user.Groups {
-			// Only track if member count is below threshold
-			if group.Group.MemberCount <= c.app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack {
+			if group.Group.MemberCount > 0 && group.Group.MemberCount <= c.app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack {
 				groupUsersTracking[group.Group.ID] = append(groupUsersTracking[group.Group.ID], userID)
 			}
 		}
 	}
 
 	// Add to tracking if we have any data
+	// NOTE: No need to check exclusions using GetExcludedGroupIDs here because new users
+	// joining these groups likely means we shouldn't have excluded them
 	if len(groupUsersTracking) > 0 {
 		if err := c.db.Model().Tracking().AddUsersToGroupsTracking(ctx, groupUsersTracking); err != nil {
 			c.logger.Error("Failed to add flagged users to groups tracking", zap.Error(err))

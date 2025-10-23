@@ -254,8 +254,24 @@ func init() {
 
 				constraintName := fmt.Sprintf("%s_%d_%s_to_%s_fkey", constraint.table, i, constraint.column, constraint.refTable)
 
+				// Check if constraint already exists
+				var exists bool
+				err := db.NewRaw(`
+					SELECT EXISTS (
+						SELECT 1 FROM pg_constraint
+						WHERE conname = ?
+					)
+				`, constraintName).Scan(ctx, &exists)
+				if err != nil {
+					return fmt.Errorf("failed to check constraint %s: %w", constraintName, err)
+				}
+
+				if exists {
+					continue
+				}
+
 				// Add constraint as NOT VALID
-				_, err := db.NewRaw(fmt.Sprintf(`
+				_, err = db.NewRaw(fmt.Sprintf(`
 					ALTER TABLE %s
 					ADD CONSTRAINT %s
 					FOREIGN KEY (%s) REFERENCES %s (%s)

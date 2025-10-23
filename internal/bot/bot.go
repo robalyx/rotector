@@ -21,7 +21,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	eventHandler "github.com/robalyx/rotector/internal/bot/events"
 	"github.com/robalyx/rotector/internal/bot/handlers/admin"
-	"github.com/robalyx/rotector/internal/bot/handlers/ban"
 	"github.com/robalyx/rotector/internal/bot/handlers/captcha"
 	"github.com/robalyx/rotector/internal/bot/handlers/consent"
 	"github.com/robalyx/rotector/internal/bot/handlers/dashboard"
@@ -141,7 +140,6 @@ func New(app *setup.App) (*Bot, error) {
 	statusLayout := status.New(app)
 	dashboardLayout := dashboard.New(app, sessionManager)
 	consentLayout := consent.New(app)
-	banLayout := ban.New(app, sessionManager)
 	reviewerLayout := reviewer.New(app, client)
 	guildLayout := guild.New(app, selfClient)
 	queueLayout := queue.New(app)
@@ -157,7 +155,6 @@ func New(app *setup.App) (*Bot, error) {
 	interactionManager.AddPages(statusLayout.Pages())
 	interactionManager.AddPages(dashboardLayout.Pages())
 	interactionManager.AddPages(consentLayout.Pages())
-	interactionManager.AddPages(banLayout.Pages())
 	interactionManager.AddPages(reviewerLayout.Pages())
 	interactionManager.AddPages(guildLayout.Pages())
 	interactionManager.AddPages(queueLayout.Pages())
@@ -258,7 +255,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.Application
 		}
 
 		// Run common validation checks
-		if !b.validateInteraction(wrappedEvent, s, isNewSession, true, "") {
+		if !b.validateInteraction(wrappedEvent, s, isNewSession, "") {
 			return
 		}
 
@@ -338,7 +335,7 @@ func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteraction
 		}
 
 		// Run common validation checks
-		if !b.validateInteraction(wrappedEvent, s, isNewSession, false, event.Data.CustomID()) {
+		if !b.validateInteraction(wrappedEvent, s, isNewSession, event.Data.CustomID()) {
 			return
 		}
 
@@ -411,7 +408,7 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 		}
 
 		// Run common validation checks
-		if !b.validateInteraction(wrappedEvent, s, isNewSession, false, "") {
+		if !b.validateInteraction(wrappedEvent, s, isNewSession, "") {
 			return
 		}
 
@@ -483,7 +480,7 @@ func (b *Bot) initializeSession(
 // validateInteraction performs common validation checks for all interaction types.
 // Returns true if the interaction should proceed, false if it should be stopped.
 func (b *Bot) validateInteraction(
-	event interaction.CommonEvent, s *session.Session, isNewSession, isCommandEvent bool, customID string,
+	event interaction.CommonEvent, s *session.Session, isNewSession bool, customID string,
 ) bool {
 	// Check if system is in maintenance mode
 	pageName := session.CurrentPage.Get(s)
@@ -493,11 +490,6 @@ func (b *Bot) validateInteraction(
 			b.interactionManager.Show(event, s, constants.DashboardPageName, "System is currently under maintenance.")
 			return false
 		}
-	}
-
-	// Check if user is banned
-	if b.checkBanStatus(event, s, pageName, isCommandEvent) {
-		return false
 	}
 
 	// Check consent for new sessions
@@ -514,40 +506,6 @@ func (b *Bot) validateInteraction(
 
 		return false
 	}
-
-	return true
-}
-
-// checkBanStatus checks if a user is banned and shows the ban menu if they are.
-// Returns true if the user is banned and should not proceed.
-func (b *Bot) checkBanStatus(event interaction.CommonEvent, s *session.Session, pageName string, isCommandEvent bool) bool {
-	userID := uint64(event.User().ID)
-
-	// Check if user is banned
-	banned, err := b.db.Model().Ban().IsBanned(context.Background(), userID)
-	if err != nil {
-		b.logger.Error("Failed to check ban status",
-			zap.Error(err),
-			zap.Uint64("userID", userID))
-		b.interactionManager.RespondWithError(event, "Failed to verify access status. Please try again later.")
-
-		return true
-	}
-
-	// If not banned, allow access
-	if !banned {
-		return false
-	}
-
-	// Handle banned user interactions
-	if !isCommandEvent && pageName == constants.BanPageName {
-		b.interactionManager.HandleInteraction(event, s)
-		return true
-	}
-
-	// User is banned, show ban menu
-	b.interactionManager.Show(event, s, constants.BanPageName, "")
-	s.Touch(context.Background())
 
 	return true
 }

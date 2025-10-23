@@ -21,12 +21,6 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		discord.NewStringSelectMenuOption("Bot Settings", constants.BotSettingsButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "⚙️"}).
 			WithDescription("Configure bot-wide settings"),
-		discord.NewStringSelectMenuOption("Ban Discord User", constants.BanUserButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "🔨"}).
-			WithDescription("Ban a Discord user from the system"),
-		discord.NewStringSelectMenuOption("Unban Discord User", constants.UnbanUserButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "🔓"}).
-			WithDescription("Unban a Discord user from the system"),
 		discord.NewStringSelectMenuOption("Delete Roblox User", constants.DeleteUserButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🗑️"}).
 			WithDescription("Delete a Roblox user from the database"),

@@ -159,8 +159,10 @@ func (r *SettingRegistry) createStreamerModeSetting() *Setting {
 			if len(inputs) < 1 {
 				return ErrMissingInput
 			}
+
 			boolVal, _ := strconv.ParseBool(inputs[0])
 			UserStreamerMode.Set(s, boolVal)
+
 			return nil
 		},
 	}
@@ -201,6 +203,7 @@ func (r *SettingRegistry) createReviewModeSetting() *Setting {
 			if len(inputs) < 1 {
 				return ErrMissingInput
 			}
+
 			reviewMode, err := enum.ReviewModeString(inputs[0])
 			if err != nil {
 				return err
@@ -212,6 +215,7 @@ func (r *SettingRegistry) createReviewModeSetting() *Setting {
 			}
 
 			UserReviewMode.Set(s, reviewMode)
+
 			return nil
 		},
 	}
@@ -259,11 +263,14 @@ func (r *SettingRegistry) createReviewTargetModeSetting() *Setting {
 			if len(inputs) < 1 {
 				return ErrMissingInput
 			}
+
 			reviewTargetMode, err := enum.ReviewTargetModeString(inputs[0])
 			if err != nil {
 				return err
 			}
+
 			UserReviewTargetMode.Set(s, reviewTargetMode)
+
 			return nil
 		},
 	}
@@ -340,10 +347,12 @@ func (r *SettingRegistry) createReviewerIDsSetting() *Setting {
 
 			// Toggle the ID
 			found := false
+
 			for i, reviewerID := range reviewerIDs {
 				if reviewerID == id {
 					reviewerIDs = slices.Delete(reviewerIDs, i, i+1)
 					found = true
+
 					break
 				}
 			}
@@ -397,10 +406,12 @@ func (r *SettingRegistry) createAdminIDsSetting() *Setting {
 
 			// Toggle the ID
 			found := false
+
 			for i, adminID := range adminIDs {
 				if adminID == id {
 					adminIDs = slices.Delete(adminIDs, i, i+1)
 					found = true
+
 					break
 				}
 			}
@@ -436,6 +447,7 @@ func (r *SettingRegistry) createWelcomeMessageSetting() *Setting {
 				if len(value) > 512 {
 					return ErrWelcomeMessageTooLong
 				}
+
 				return nil
 			},
 		},
@@ -444,6 +456,7 @@ func (r *SettingRegistry) createWelcomeMessageSetting() *Setting {
 			if welcomeMessage == "" {
 				return "No welcome message set"
 			}
+
 			return welcomeMessage
 		},
 		ValueUpdater: func(_ string, inputs []string, s *Session) error {
@@ -537,6 +550,7 @@ func (r *SettingRegistry) createAnnouncementMessageSetting() *Setting {
 				if len(value) > 512 {
 					return ErrAnnouncementTooLong
 				}
+
 				return nil
 			},
 		},
@@ -545,6 +559,7 @@ func (r *SettingRegistry) createAnnouncementMessageSetting() *Setting {
 			if announcementMessage == "" {
 				return "No announcement message set"
 			}
+
 			return announcementMessage
 		},
 		ValueUpdater: func(_ string, inputs []string, s *Session) error {

@@ -3,31 +3,25 @@ package admin
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/database/types/enum"
 )
 
 // ConfirmBuilder creates the visual layout for the confirmation menu.
 type ConfirmBuilder struct {
-	action    string
-	id        string
-	reason    string
-	banReason enum.BanReason
-	expiresAt *time.Time
+	action string
+	id     string
+	reason string
 }
 
 // NewConfirmBuilder creates a new confirmation menu builder.
 func NewConfirmBuilder(s *session.Session) *ConfirmBuilder {
 	return &ConfirmBuilder{
-		action:    session.AdminAction.Get(s),
-		id:        session.AdminActionID.Get(s),
-		reason:    session.AdminReason.Get(s),
-		banReason: session.AdminBanReason.Get(s),
-		expiresAt: session.AdminBanExpiry.Get(s),
+		action: session.AdminAction.Get(s),
+		id:     session.AdminActionID.Get(s),
+		reason: session.AdminReason.Get(s),
 	}
 }
 
@@ -44,14 +38,6 @@ func (b *ConfirmBuilder) Build() *discord.MessageUpdateBuilder {
 	case constants.DeleteGroupAction:
 		title = "Confirm Roblox Group Deletion"
 		description = fmt.Sprintf("Are you sure you want to delete roblox group `%s` from the database?", b.id)
-
-	case constants.BanUserAction:
-		title = "Confirm Discord User Ban"
-		description = fmt.Sprintf("Are you sure you want to ban Discord user `%s`?", b.id)
-
-	case constants.UnbanUserAction:
-		title = "Confirm Discord User Unban"
-		description = fmt.Sprintf("Are you sure you want to unban Discord user `%s`?", b.id)
 	}
 
 	// Build content based on action type
@@ -62,21 +48,6 @@ func (b *ConfirmBuilder) Build() *discord.MessageUpdateBuilder {
 	switch b.action {
 	case constants.DeleteUserAction, constants.DeleteGroupAction:
 		content.WriteString("\n### Reason\n" + b.reason)
-
-	case constants.BanUserAction:
-		content.WriteString("\n### Ban Details\n")
-		content.WriteString(fmt.Sprintf("-# Ban Reason: %s\n", b.banReason.String()))
-
-		if b.expiresAt != nil {
-			content.WriteString(fmt.Sprintf("-# Expires: <t:%d:f>\n", b.expiresAt.Unix()))
-		} else {
-			content.WriteString("-# Duration: Permanent\n")
-		}
-
-		content.WriteString("\n### Notes\n" + b.reason)
-
-	case constants.UnbanUserAction:
-		content.WriteString("\n### Notes\n" + b.reason)
 	}
 
 	// Create main container

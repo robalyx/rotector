@@ -36,7 +36,7 @@ func (m *MessageModel) BatchStoreInappropriateMessages(
 	return dbretry.NoResult(ctx, func(ctx context.Context) error {
 		_, err := m.db.NewInsert().
 			Model(&messages).
-			On("CONFLICT (server_id, channel_id, user_id, message_id) DO UPDATE").
+			On("CONFLICT (server_id, user_id, message_id) DO UPDATE").
 			Set("content = EXCLUDED.content").
 			Set("reason = EXCLUDED.reason").
 			Set("confidence = EXCLUDED.confidence").

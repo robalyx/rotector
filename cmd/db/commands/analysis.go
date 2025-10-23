@@ -218,8 +218,8 @@ func extractTermsFromText(text string) []string {
 	}
 
 	// Also extract individual words that might be suspicious
-	words := strings.Fields(text)
-	for _, word := range words {
+	words := strings.FieldsSeq(text)
+	for word := range words {
 		// Clean word of punctuation
 		cleaned := strings.FieldsFunc(word, func(c rune) bool {
 			return !unicode.IsLetter(c) && !unicode.IsNumber(c)

@@ -8,7 +8,6 @@ import (
 
 // Service provides access to all business logic services.
 type Service struct {
-	ban      *service.BanService
 	user     *service.UserService
 	group    *service.GroupService
 	reviewer *service.ReviewerService
@@ -20,7 +19,6 @@ type Service struct {
 
 // NewService creates a new service instance with all services.
 func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service {
-	banModel := repository.Ban()
 	userModel := repository.User()
 	groupModel := repository.Group()
 	activityModel := repository.Activity()
@@ -34,7 +32,6 @@ func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service
 	viewService := service.NewView(viewModel, logger)
 
 	return &Service{
-		ban:      service.NewBan(banModel, logger),
 		user:     service.NewUser(db, userModel, activityModel, trackingModel, logger),
 		group:    service.NewGroup(db, groupModel, activityModel, logger),
 		reviewer: service.NewReviewer(reviewerModel, viewService, logger),
@@ -43,11 +40,6 @@ func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service
 		sync:     service.NewSync(syncModel, logger),
 		comment:  service.NewComment(commentModel, logger),
 	}
-}
-
-// Ban returns the ban service.
-func (s *Service) Ban() *service.BanService {
-	return s.ban
 }
 
 // User returns the user service.

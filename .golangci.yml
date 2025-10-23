@@ -29,6 +29,7 @@ linters:
     - interfacebloat
     - gocognit
     - noinlineerr
+    - lll
   settings:
     exhaustruct:
       exclude:
@@ -82,8 +83,6 @@ linters:
       enable-all: true
     inamedparam:
       skip-single-param: true
-    lll:
-      line-length: 140
     mnd:
       ignored-functions:
         - args.Error
@@ -143,7 +142,7 @@ linters:
         text: 'SA1019: .* is deprecated: Use Service\(\)\..*\(\) instead\.'
       - linters:
           - revive
-        text: 'var-naming: avoid meaningless package names'
+        text: "var-naming: avoid meaningless package names"
       - linters:
           - containedctx
         path: internal/tui/

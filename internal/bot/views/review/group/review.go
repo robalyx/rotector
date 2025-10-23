@@ -252,9 +252,14 @@ func (b *ReviewBuilder) buildGroupInfoSection() discord.ContainerSubComponent {
 		utils.CensorString(b.group.Name, b.PrivacyMode)))
 
 	// Add owner info
-	ownerID := strconv.FormatInt(b.group.Owner.UserID, 10)
-	content.WriteString(fmt.Sprintf("-# Owner: [%s](https://www.roblox.com/users/%d/profile)\n",
-		utils.CensorString(ownerID, b.PrivacyMode), b.group.Owner.UserID))
+	if b.group.Owner != nil {
+		ownerID := strconv.FormatInt(b.group.Owner.UserID, 10)
+		content.WriteString(fmt.Sprintf("-# Owner: [%s](https://www.roblox.com/users/%d/profile)\n",
+			utils.CensorString(ownerID, b.PrivacyMode), b.group.Owner.UserID))
+	} else {
+		content.WriteString("-# Owner: N/A\n")
+	}
+
 	content.WriteString(fmt.Sprintf("-# Members: %s\n", strconv.FormatInt(b.groupInfo.MemberCount, 10)))
 	content.WriteString("-# Flagged Members: " + strconv.Itoa(b.flaggedCount))
 
@@ -389,6 +394,16 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		options = append(options, reviewerOptions...)
 	}
 
+	// Add admin-only options
+	if b.IsAdmin {
+		adminOptions := []discord.StringSelectMenuOption{
+			discord.NewStringSelectMenuOption("Delete Group", constants.GroupDeleteButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "🗑️"}).
+				WithDescription("Permanently delete this group from the system"),
+		}
+		options = append(options, adminOptions...)
+	}
+
 	// Add last default option
 	options = append(options,
 		discord.NewStringSelectMenuOption("Change Review Target", constants.ReviewTargetModeOption).
@@ -421,12 +436,18 @@ func (b *ReviewBuilder) getDescription() string {
 	}
 
 	// Prepare description
+	censorStrings := []string{
+		strconv.FormatInt(b.group.ID, 10),
+		b.group.Name,
+	}
+	if b.group.Owner != nil {
+		censorStrings = append(censorStrings, strconv.FormatInt(b.group.Owner.UserID, 10))
+	}
+
 	description = utils.CensorStringsInText(
 		description,
 		b.PrivacyMode,
-		strconv.FormatInt(b.group.ID, 10),
-		b.group.Name,
-		strconv.FormatInt(b.group.Owner.UserID, 10),
+		censorStrings...,
 	)
 	description = utils.TruncateString(description, 400)
 	description = utils.FormatString(description)

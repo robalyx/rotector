@@ -204,12 +204,6 @@ var (
 	AdminActionID = NewKey[string]("AdminActionID", true)
 	// AdminReason stores the admin action reason
 	AdminReason = NewKey[string]("AdminReason", true)
-	// AdminBanReason stores the ban reason
-	AdminBanReason = NewKey[enum.BanReason]("AdminBanReason", true)
-	// AdminBanExpiry stores the ban expiry time
-	AdminBanExpiry = NewKey[*time.Time]("AdminBanExpiry", true)
-	// AdminBanInfo stores ban information
-	AdminBanInfo = NewKey[*types.DiscordBan]("AdminBanInfo", true)
 	// ReviewerStats stores reviewer statistics
 	ReviewerStats = NewKey[map[uint64]*types.ReviewerStats]("ReviewerStats", true)
 	// ReviewerUsernames stores usernames for reviewers

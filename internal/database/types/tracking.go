@@ -45,6 +45,11 @@ type GameTrackingUser struct {
 	UserID int64 `bun:",pk"`
 }
 
+// GroupTrackingExclusion stores group IDs that should be excluded from tracking.
+type GroupTrackingExclusion struct {
+	GroupID int64 `bun:",pk"`
+}
+
 // TrackedID represents an ID that can be either an outfit ID or user ID.
 type TrackedID struct {
 	ID       int64

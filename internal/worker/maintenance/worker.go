@@ -23,26 +23,28 @@ import (
 
 // Worker handles all maintenance operations.
 type Worker struct {
-	db                      database.Client
-	cfClient                *cloudflare.Client
-	bot                     *bot.Client
-	roAPI                   *api.API
-	bar                     *components.ProgressBar
-	userFetcher             *fetcher.UserFetcher
-	groupFetcher            *fetcher.GroupFetcher
-	thumbnailFetcher        *fetcher.ThumbnailFetcher
-	groupChecker            *checker.GroupChecker
-	reporter                *core.StatusReporter
-	logger                  *zap.Logger
-	reviewerInfoMaxAge      time.Duration
-	userBatchSize           int
-	groupBatchSize          int
-	trackBatchSize          int
-	thumbnailUserBatchSize  int
-	thumbnailGroupBatchSize int
-	minGroupFlaggedUsers    int
-	minFlaggedOverride      int
-	minFlaggedPercent       float64
+	db                       database.Client
+	cfClient                 *cloudflare.Client
+	bot                      *bot.Client
+	roAPI                    *api.API
+	bar                      *components.ProgressBar
+	userFetcher              *fetcher.UserFetcher
+	groupFetcher             *fetcher.GroupFetcher
+	thumbnailFetcher         *fetcher.ThumbnailFetcher
+	groupChecker             *checker.GroupChecker
+	reporter                 *core.StatusReporter
+	logger                   *zap.Logger
+	reviewerInfoMaxAge       time.Duration
+	userBatchSize            int
+	groupBatchSize           int
+	trackBatchSize           int
+	trackUserGroupsBatchSize int
+	thumbnailUserBatchSize   int
+	thumbnailGroupBatchSize  int
+	maxGroupMembersTrack     int64
+	minGroupFlaggedUsers     int
+	minFlaggedOverride       int
+	minFlaggedPercent        float64
 }
 
 // New creates a new maintenance worker.
@@ -67,26 +69,28 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 	}
 
 	return &Worker{
-		db:                      app.DB,
-		cfClient:                app.CFClient,
-		bot:                     client,
-		roAPI:                   app.RoAPI,
-		bar:                     bar,
-		userFetcher:             userFetcher,
-		groupFetcher:            groupFetcher,
-		thumbnailFetcher:        thumbnailFetcher,
-		groupChecker:            groupChecker,
-		reporter:                reporter,
-		logger:                  logger.Named("maintenance_worker"),
-		reviewerInfoMaxAge:      24 * time.Hour,
-		userBatchSize:           app.Config.Worker.BatchSizes.PurgeUsers,
-		groupBatchSize:          app.Config.Worker.BatchSizes.PurgeGroups,
-		trackBatchSize:          app.Config.Worker.BatchSizes.TrackGroups,
-		thumbnailUserBatchSize:  app.Config.Worker.BatchSizes.ThumbnailUsers,
-		thumbnailGroupBatchSize: app.Config.Worker.BatchSizes.ThumbnailGroups,
-		minGroupFlaggedUsers:    app.Config.Worker.ThresholdLimits.MinGroupFlaggedUsers,
-		minFlaggedOverride:      app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
-		minFlaggedPercent:       app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
+		db:                       app.DB,
+		cfClient:                 app.CFClient,
+		bot:                      client,
+		roAPI:                    app.RoAPI,
+		bar:                      bar,
+		userFetcher:              userFetcher,
+		groupFetcher:             groupFetcher,
+		thumbnailFetcher:         thumbnailFetcher,
+		groupChecker:             groupChecker,
+		reporter:                 reporter,
+		logger:                   logger.Named("maintenance_worker"),
+		reviewerInfoMaxAge:       24 * time.Hour,
+		userBatchSize:            app.Config.Worker.BatchSizes.PurgeUsers,
+		groupBatchSize:           app.Config.Worker.BatchSizes.PurgeGroups,
+		trackBatchSize:           app.Config.Worker.BatchSizes.TrackGroups,
+		trackUserGroupsBatchSize: app.Config.Worker.BatchSizes.TrackUserGroups,
+		thumbnailUserBatchSize:   app.Config.Worker.BatchSizes.ThumbnailUsers,
+		thumbnailGroupBatchSize:  app.Config.Worker.BatchSizes.ThumbnailGroups,
+		maxGroupMembersTrack:     app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
+		minGroupFlaggedUsers:     app.Config.Worker.ThresholdLimits.MinGroupFlaggedUsers,
+		minFlaggedOverride:       app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
+		minFlaggedPercent:        app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
 	}
 }
 
@@ -120,22 +124,25 @@ func (w *Worker) Start(ctx context.Context) {
 		// Step 3: Process cleared users (30%)
 		w.processClearedUsers(ctx)
 
-		// Step 4: Process group tracking (40%)
+		// Step 4: Process user group tracking (35%)
+		w.processUserGroupTracking(ctx)
+
+		// Step 5: Process group tracking (40%)
 		w.processGroupTracking(ctx)
 
-		// Step 5: Process user thumbnails (50%)
+		// Step 6: Process user thumbnails (50%)
 		w.processUserThumbnails(ctx)
 
-		// Step 6: Process group thumbnails (60%)
+		// Step 7: Process group thumbnails (60%)
 		w.processGroupThumbnails(ctx)
 
-		// Step 7: Process old Discord server members (70%)
+		// Step 8: Process old Discord server members (70%)
 		w.processOldServerMembers(ctx)
 
-		// Step 8: Process reviewer info (80%)
+		// Step 9: Process reviewer info (80%)
 		w.processReviewerInfo(ctx)
 
-		// Step 9: Completed (100%)
+		// Step 10: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)
 		w.reporter.UpdateStatus("Completed", 100)
 
@@ -318,6 +325,90 @@ func (w *Worker) processClearedUsers(ctx context.Context) {
 		w.logger.Info("Purged old cleared users",
 			zap.Int("affected", affected),
 			zap.Time("cutOffDate", cutOffDate))
+	}
+}
+
+// processUserGroupTracking checks for new groups joined by flagged/confirmed users.
+func (w *Worker) processUserGroupTracking(ctx context.Context) {
+	w.bar.SetStepMessage("Processing user group tracking", 35)
+	w.reporter.UpdateStatus("Processing user group tracking", 35)
+
+	// Get users to check for new groups
+	userIDs, err := w.db.Model().User().GetUsersForGroupCheck(ctx, w.trackUserGroupsBatchSize)
+	if err != nil {
+		w.logger.Error("Error getting users for group check", zap.Error(err))
+		w.reporter.SetHealthy(false)
+
+		return
+	}
+
+	if len(userIDs) == 0 {
+		w.logger.Debug("No users to check for new groups")
+		return
+	}
+
+	// Fetch current groups for each user and add to tracking
+	groupUsersTracking := make(map[int64][]int64)
+
+	for _, userID := range userIDs {
+		groups, err := w.groupFetcher.GetUserGroups(ctx, userID)
+		if err != nil {
+			w.logger.Error("Error fetching user groups",
+				zap.Int64("userID", userID),
+				zap.Error(err))
+
+			continue
+		}
+
+		// Add groups that are below member count threshold
+		for _, group := range groups {
+			if group.Group.MemberCount > 0 && group.Group.MemberCount <= w.maxGroupMembersTrack {
+				groupUsersTracking[group.Group.ID] = append(groupUsersTracking[group.Group.ID], userID)
+			}
+		}
+	}
+
+	// Filter out excluded groups
+	if len(groupUsersTracking) > 0 {
+		// Get list of group IDs to check
+		groupIDs := make([]int64, 0, len(groupUsersTracking))
+		for groupID := range groupUsersTracking {
+			groupIDs = append(groupIDs, groupID)
+		}
+
+		// Batch check for excluded groups
+		excludedGroups, err := w.db.Model().Tracking().GetExcludedGroupIDs(ctx, groupIDs)
+		if err != nil {
+			w.logger.Error("Error checking for excluded groups", zap.Error(err))
+			w.reporter.SetHealthy(false)
+
+			return
+		}
+
+		// Filter out excluded groups
+		filteredTracking := make(map[int64][]int64)
+
+		for groupID, users := range groupUsersTracking {
+			if _, excluded := excludedGroups[groupID]; !excluded {
+				filteredTracking[groupID] = users
+			}
+		}
+
+		groupUsersTracking = filteredTracking
+	}
+
+	// Add to tracking if we have any data
+	if len(groupUsersTracking) > 0 {
+		if err := w.db.Model().Tracking().AddUsersToGroupsTracking(ctx, groupUsersTracking); err != nil {
+			w.logger.Error("Failed to add users to groups tracking", zap.Error(err))
+			w.reporter.SetHealthy(false)
+
+			return
+		}
+
+		w.logger.Info("Added user groups to tracking",
+			zap.Int("usersChecked", len(userIDs)),
+			zap.Int("groupsTracked", len(groupUsersTracking)))
 	}
 }
 

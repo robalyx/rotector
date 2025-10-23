@@ -40,7 +40,6 @@ func init() { //nolint:funlen
 			{(*types.GroupReason)(nil), "group_reasons", "group_id"},
 			{(*types.GroupVerification)(nil), "group_verifications", "group_id"},
 			{(*types.GroupMixedClassification)(nil), "group_mixed_classifications", "group_id"},
-			{(*types.CondoGame)(nil), "condo_games", "id"},
 			{(*types.GroupMemberTracking)(nil), "group_member_trackings", "id"},
 			{(*types.GroupMemberTrackingUser)(nil), "group_member_tracking_users", "group_id"},
 			{(*types.OutfitAssetTracking)(nil), "outfit_asset_trackings", "id"},
@@ -53,6 +52,7 @@ func init() { //nolint:funlen
 			{(*types.InappropriateUserSummary)(nil), "inappropriate_user_summaries", "user_id"},
 			{(*types.DiscordUserFullScan)(nil), "discord_user_full_scans", "user_id"},
 			{(*types.DiscordUserWhitelist)(nil), "discord_user_whitelists", "user_id"},
+			{(*types.DiscordRobloxConnection)(nil), "discord_roblox_connections", "discord_user_id"},
 			{(*types.UserComment)(nil), "user_comments", "target_id"},
 			{(*types.GroupComment)(nil), "group_comments", "target_id"},
 		}
@@ -85,14 +85,12 @@ func init() { //nolint:funlen
 			(*types.UserSetting)(nil),
 			(*types.BotSetting)(nil),
 			(*types.ActivityLog)(nil),
-			(*types.DiscordBan)(nil),
 			(*types.MaterializedViewRefresh)(nil),
 			(*types.UserConsent)(nil),
 			(*types.DiscordServerInfo)(nil),
 			(*types.GuildBanLog)(nil),
-			(*types.CondoPlayer)(nil),
-			(*types.IvanMessage)(nil),
 			(*types.ReviewerInfo)(nil),
+			(*types.GroupTrackingExclusion)(nil),
 		}
 
 		for _, model := range models {
@@ -109,14 +107,12 @@ func init() { //nolint:funlen
 	}, func(ctx context.Context, db *bun.DB) error {
 		// Down migration - drop all tables
 		models := []any{
+			(*types.GroupTrackingExclusion)(nil),
 			(*types.ReviewerInfo)(nil),
-			(*types.IvanMessage)(nil),
-			(*types.CondoPlayer)(nil),
 			(*types.GuildBanLog)(nil),
 			(*types.DiscordServerInfo)(nil),
 			(*types.UserConsent)(nil),
 			(*types.MaterializedViewRefresh)(nil),
-			(*types.DiscordBan)(nil),
 			(*types.GroupMemberTracking)(nil),
 			(*types.ActivityLog)(nil),
 			(*types.BotSetting)(nil),
@@ -140,6 +136,8 @@ func init() { //nolint:funlen
 			"group_comments",
 			"user_comments",
 			"discord_user_full_scans",
+			"discord_user_whitelists",
+			"discord_roblox_connections",
 			"inappropriate_user_summaries",
 			"inappropriate_messages",
 			"discord_user_redactions",

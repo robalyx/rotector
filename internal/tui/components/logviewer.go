@@ -256,11 +256,17 @@ func (lv *LogViewer) wrapText(text string, width int) string {
 	var wrapped []string
 
 	currentLine := ""
-	words := strings.Fields(text)
+	words := strings.FieldsSeq(text)
 
-	for _, word := range words {
+	for word := range words {
+		// Calculate space needed (only if currentLine is non-empty)
+		sep := 0
+		if currentLine != "" {
+			sep = 1
+		}
+
 		// If adding this word would exceed width, start new line
-		if len(currentLine)+len(word)+1 > width {
+		if len(currentLine)+sep+len(word) > width {
 			if currentLine != "" {
 				wrapped = append(wrapped, currentLine)
 			}

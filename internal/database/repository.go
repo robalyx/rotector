@@ -15,15 +15,12 @@ type Repository struct {
 	activity *models.ActivityModel
 	guildBan *models.GuildBanModel
 	tracking *models.TrackingModel
-	ban      *models.BanModel
 	view     *models.MaterializedViewModel
 	consent  *models.ConsentModel
 	reviewer *models.ReviewerModel
 	sync     *models.SyncModel
 	message  *models.MessageModel
-	condo    *models.CondoModel
 	comment  *models.CommentModel
-	ivan     *models.IvanModel
 }
 
 // NewRepository creates a new repository instance with all models.
@@ -36,15 +33,12 @@ func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 		activity: models.NewActivity(db, logger),
 		guildBan: models.NewGuildBan(db, logger),
 		tracking: models.NewTracking(db, logger),
-		ban:      models.NewBan(db, logger),
 		view:     models.NewMaterializedView(db, logger),
 		consent:  models.NewConsent(db, logger),
 		reviewer: models.NewReviewer(db, logger),
 		sync:     models.NewSync(db, logger),
 		message:  models.NewMessage(db, logger),
-		condo:    models.NewCondo(db, logger),
 		comment:  models.NewComment(db, logger),
-		ivan:     models.NewIvan(db, logger),
 	}
 }
 
@@ -83,11 +77,6 @@ func (r *Repository) Tracking() *models.TrackingModel {
 	return r.tracking
 }
 
-// Ban returns the ban model repository.
-func (r *Repository) Ban() *models.BanModel {
-	return r.ban
-}
-
 // View returns the materialized view model repository.
 func (r *Repository) View() *models.MaterializedViewModel {
 	return r.view
@@ -113,17 +102,7 @@ func (r *Repository) Message() *models.MessageModel {
 	return r.message
 }
 
-// Condo returns the condo model repository.
-func (r *Repository) Condo() *models.CondoModel {
-	return r.condo
-}
-
 // Comment returns the comment model repository.
 func (r *Repository) Comment() *models.CommentModel {
 	return r.comment
-}
-
-// Ivan returns the ivan model repository.
-func (r *Repository) Ivan() *models.IvanModel {
-	return r.ivan
 }

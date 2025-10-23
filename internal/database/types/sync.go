@@ -58,3 +58,13 @@ type DiscordUserWhitelist struct {
 	Reason        string    `bun:",notnull" json:"reason"`        // Why the user was whitelisted
 	ReviewerID    uint64    `bun:",notnull" json:"reviewerId"`    // Who whitelisted the user
 }
+
+// DiscordRobloxConnection represents a mapping between Discord and Roblox accounts.
+type DiscordRobloxConnection struct {
+	DiscordUserID  uint64    `bun:",pk"      json:"discordUserId"`  // Discord user ID
+	RobloxUserID   int64     `bun:",notnull" json:"robloxUserId"`   // Roblox user ID
+	RobloxUsername string    `bun:",notnull" json:"robloxUsername"` // Roblox username
+	Verified       bool      `bun:",notnull" json:"verified"`       // Whether connection is verified
+	DetectedAt     time.Time `bun:",notnull" json:"detectedAt"`     // When connection was discovered
+	UpdatedAt      time.Time `bun:",notnull" json:"updatedAt"`      // Last update time
+}

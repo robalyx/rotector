@@ -284,6 +284,7 @@ func (m *Menu) handleManualUserReviewModalSubmit(ctx *interaction.Context, s *se
 	user.Status = enum.UserTypeFlagged
 	user.UUID = uuid.New()
 	user.Reasons = make(types.Reasons[enum.UserReasonType])
+	user.EngineVersion = types.CurrentEngineVersion
 
 	// Save the new user to the database
 	if err := m.layout.db.Service().User().SaveUsers(ctx.Context(), map[int64]*types.ReviewUser{

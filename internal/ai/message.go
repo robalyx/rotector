@@ -6,15 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
-	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
-	"github.com/sourcegraph/conc/pool"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
@@ -26,45 +23,38 @@ import (
 // MessageContent represents a Discord message for analysis.
 type MessageContent struct {
 	MessageID string `json:"messageId"`
-	UserID    uint64 `json:"userId"`
 	Content   string `json:"content"`
 }
 
 // FlaggedMessage contains information about an inappropriate message.
 type FlaggedMessage struct {
-	MessageID  string  `json:"messageId"`
-	Content    string  `json:"content"`
-	Reason     string  `json:"reason"`
-	Confidence float64 `json:"confidence"`
+	MessageID  string  `json:"messageId"  jsonschema:"required,minLength=1,description=Discord message ID"`
+	Content    string  `json:"content"    jsonschema:"required,minLength=1,description=Message content that violates policies"`
+	Reason     string  `json:"reason"     jsonschema:"required,minLength=1,description=Reason for flagging this message"`
+	Confidence float64 `json:"confidence" jsonschema:"required,minimum=0,maximum=1,description=Confidence score for this violation"`
 }
 
 // FlaggedMessageUser contains information about a user with inappropriate messages.
 type FlaggedMessageUser struct {
-	UserID     uint64           `json:"userId"`
-	Reason     string           `json:"reason"`
-	Messages   []FlaggedMessage `json:"messages"`
-	Confidence float64          `json:"confidence"`
-}
-
-// FlaggedMessagesResponse represents the AI's response structure.
-type FlaggedMessagesResponse struct {
-	Users []FlaggedMessageUser `json:"users"`
+	Reason     string           `json:"reason"     jsonschema:"required,minLength=1,description=Overall reason for flagging this user"`
+	Messages   []FlaggedMessage `json:"messages"   jsonschema:"required,maxItems=100,description=List of inappropriate messages from this user"`
+	Confidence float64          `json:"confidence" jsonschema:"required,minimum=0,maximum=1,description=Overall confidence score for user violations"`
 }
 
 // MessageAnalyzer processes Discord messages to detect inappropriate content.
 type MessageAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	analysisSem *semaphore.Weighted
-	batchSize   int
-	logger      *zap.Logger
-	textLogger  *zap.Logger
-	textDir     string
-	model       string
+	chat          client.ChatCompletions
+	minify        *minify.M
+	analysisSem   *semaphore.Weighted
+	logger        *zap.Logger
+	textLogger    *zap.Logger
+	textDir       string
+	model         string
+	fallbackModel string
 }
 
 // MessageAnalysisSchema is the JSON schema for the message analysis response.
-var MessageAnalysisSchema = utils.GenerateSchema[FlaggedMessagesResponse]()
+var MessageAnalysisSchema = utils.GenerateSchema[FlaggedMessageUser]()
 
 // NewMessageAnalyzer creates a new message analyzer.
 func NewMessageAnalyzer(app *setup.App, logger *zap.Logger) *MessageAnalyzer {
@@ -79,106 +69,126 @@ func NewMessageAnalyzer(app *setup.App, logger *zap.Logger) *MessageAnalyzer {
 	}
 
 	return &MessageAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
-		batchSize:   app.Config.Worker.BatchSizes.MessageAnalysisBatch,
-		logger:      logger.Named("ai_message"),
-		textLogger:  textLogger,
-		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.MessageModel,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
+		logger:        logger.Named("ai_message"),
+		textLogger:    textLogger,
+		textDir:       textDir,
+		model:         app.Config.Common.OpenAI.MessageModel,
+		fallbackModel: app.Config.Common.OpenAI.MessageFallbackModel,
 	}
 }
 
 // ProcessMessages analyzes a collection of Discord messages for inappropriate content.
 func (a *MessageAnalyzer) ProcessMessages(
-	ctx context.Context, serverID uint64, channelID uint64, serverName string, messages []*MessageContent,
-) (map[uint64]*FlaggedMessageUser, error) {
-	a.logger.Info("Starting message analysis",
-		zap.Uint64("serverID", serverID),
-		zap.Uint64("channelID", channelID),
-		zap.String("server_name", serverName),
-		zap.Int("message_count", len(messages)))
-
-	// Organize messages into batches
-	batches := make([][]*MessageContent, 0, (len(messages)+a.batchSize-1)/a.batchSize)
-	for i := 0; i < len(messages); i += a.batchSize {
-		end := min(i+a.batchSize, len(messages))
-		batches = append(batches, messages[i:end])
+	ctx context.Context, serverID uint64, channelID uint64, serverName string, userID uint64, messages []*MessageContent,
+) (*FlaggedMessageUser, error) {
+	// Acquire semaphore
+	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
+		return nil, fmt.Errorf("failed to acquire analysis semaphore: %w", err)
 	}
+	defer a.analysisSem.Release(1)
 
-	// Process batches concurrently
-	var (
-		p            = pool.New().WithErrors().WithContext(ctx)
-		flaggedUsers = make(map[uint64]*FlaggedMessageUser)
-		mu           sync.Mutex
-	)
+	// Handle content blocking
+	minBatchSize := max(len(messages)/4, 1)
 
-	for _, batch := range batches {
-		batchCopy := batch
+	var cumulativeFlaggedUser *FlaggedMessageUser
 
-		p.Go(func(ctx context.Context) error {
-			// Analyze the batch
-			flaggedResults, err := a.processBatch(ctx, serverID, serverName, batchCopy)
+	err := utils.WithRetrySplitBatch(
+		ctx, messages, len(messages), minBatchSize, utils.GetAIRetryOptions(),
+		func(batch []*MessageContent) error {
+			batchResult, err := a.processMessageBatch(ctx, batch)
 			if err != nil {
-				return fmt.Errorf("failed to process message batch: %w", err)
+				return err
 			}
 
-			// Merge results into the main map
-			mu.Lock()
-			defer mu.Unlock()
+			// Skip if batch had no flagged content
+			if batchResult == nil {
+				return nil
+			}
 
-			for _, flaggedUser := range flaggedResults.Users {
-				if existing, found := flaggedUsers[flaggedUser.UserID]; found {
-					// Merge messages for existing user
-					existing.Messages = append(existing.Messages, flaggedUser.Messages...)
-					// Update reason if confidence is higher
-					if flaggedUser.Confidence > existing.Confidence {
-						existing.Reason = flaggedUser.Reason
-						existing.Confidence = flaggedUser.Confidence
-					}
-				} else {
-					// Add new user
-					flaggedUsers[flaggedUser.UserID] = &FlaggedMessageUser{
-						UserID:     flaggedUser.UserID,
-						Reason:     flaggedUser.Reason,
-						Messages:   flaggedUser.Messages,
-						Confidence: flaggedUser.Confidence,
-					}
-				}
+			// First batch result
+			if cumulativeFlaggedUser == nil {
+				cumulativeFlaggedUser = batchResult
+				return nil
+			}
+
+			// Merge subsequent batch results
+			cumulativeFlaggedUser.Messages = append(cumulativeFlaggedUser.Messages, batchResult.Messages...)
+
+			// Keep the reason with the highest confidence
+			if batchResult.Confidence > cumulativeFlaggedUser.Confidence {
+				cumulativeFlaggedUser.Confidence = batchResult.Confidence
+				cumulativeFlaggedUser.Reason = batchResult.Reason
 			}
 
 			return nil
-		})
+		},
+		func(batch []*MessageContent) {
+			// Log detailed content to text logger
+			a.textLogger.Warn("Content blocked in message batch",
+				zap.Uint64("serverID", serverID),
+				zap.String("server_name", serverName),
+				zap.Uint64("userID", userID),
+				zap.Int("batch_size", len(batch)),
+				zap.Any("messages", batch))
+
+			// Save blocked messages to file
+			filename := fmt.Sprintf("%d_%s.txt", serverID, time.Now().Format("20060102_150405"))
+			filePath := filepath.Join(a.textDir, filename)
+
+			var buf bytes.Buffer
+			for _, msg := range batch {
+				buf.WriteString(fmt.Sprintf("Message ID: %s\nUser ID: %d\nContent: %s\n\n",
+					msg.MessageID, userID, msg.Content))
+			}
+
+			if err := os.WriteFile(filePath, buf.Bytes(), 0o600); err != nil {
+				a.textLogger.Error("Failed to save blocked messages",
+					zap.Error(err),
+					zap.String("path", filePath))
+
+				return
+			}
+
+			a.textLogger.Info("Saved blocked messages",
+				zap.String("path", filePath))
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process message batch: %w", err)
 	}
 
-	if err := p.Wait(); err != nil {
-		return nil, fmt.Errorf("error in message analysis: %w", err)
+	// Validate message IDs
+	if cumulativeFlaggedUser != nil {
+		a.validateMessageOwnership(messages, cumulativeFlaggedUser)
+
+		// If no valid messages remain after validation, return nil
+		if len(cumulativeFlaggedUser.Messages) == 0 {
+			cumulativeFlaggedUser = nil
+		}
 	}
 
 	a.logger.Info("Message analysis completed",
 		zap.Uint64("serverID", serverID),
 		zap.Uint64("channelID", channelID),
-		zap.Int("flagged_users", len(flaggedUsers)))
+		zap.Bool("user_flagged", cumulativeFlaggedUser != nil))
 
-	return flaggedUsers, nil
+	return cumulativeFlaggedUser, nil
 }
 
 // processMessageBatch handles the AI analysis for a batch of messages.
 func (a *MessageAnalyzer) processMessageBatch(
-	ctx context.Context, serverID uint64, serverName string, batch []*MessageContent,
-) (*FlaggedMessagesResponse, error) {
+	ctx context.Context, batch []*MessageContent,
+) (*FlaggedMessageUser, error) {
 	// Prepare message data for AI
 	type ConversationAnalysisRequest struct {
-		ServerName string            `json:"serverName"`
-		ServerID   uint64            `json:"serverId"`
-		Messages   []*MessageContent `json:"messages"`
+		Messages []*MessageContent `json:"messages"`
 	}
 
 	request := ConversationAnalysisRequest{
-		ServerName: serverName,
-		ServerID:   serverID,
-		Messages:   batch,
+		Messages: batch,
 	}
 
 	// Convert to JSON
@@ -218,9 +228,9 @@ func (a *MessageAnalyzer) processMessageBatch(
 	}
 
 	// Make API request
-	var result FlaggedMessagesResponse
+	var result FlaggedMessageUser
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)
@@ -246,103 +256,33 @@ func (a *MessageAnalyzer) processMessageBatch(
 
 		return nil
 	})
-
-	return &result, err
-}
-
-// processBatch processes a batch of messages using the AI model.
-func (a *MessageAnalyzer) processBatch(
-	ctx context.Context, serverID uint64, serverName string, messages []*MessageContent,
-) (*FlaggedMessagesResponse, error) {
-	// Acquire semaphore
-	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
-		return nil, fmt.Errorf("failed to acquire analysis semaphore: %w", err)
-	}
-	defer a.analysisSem.Release(1)
-
-	// Handle content blocking
-	minBatchSize := max(len(messages)/4, 1)
-
-	var result *FlaggedMessagesResponse
-
-	err := utils.WithRetrySplitBatch(
-		ctx, messages, len(messages), minBatchSize, utils.GetAIRetryOptions(),
-		func(batch []*MessageContent) error {
-			var err error
-
-			result, err = a.processMessageBatch(ctx, serverID, serverName, batch)
-
-			return err
-		},
-		func(batch []*MessageContent) {
-			// Log detailed content to text logger
-			a.textLogger.Warn("Content blocked in message batch",
-				zap.Uint64("serverID", serverID),
-				zap.String("server_name", serverName),
-				zap.Int("batch_size", len(batch)),
-				zap.Any("messages", batch))
-
-			// Save blocked messages to file
-			filename := fmt.Sprintf("%d_%s.txt", serverID, time.Now().Format("20060102_150405"))
-			filePath := filepath.Join(a.textDir, filename)
-
-			var buf bytes.Buffer
-			for _, msg := range batch {
-				buf.WriteString(fmt.Sprintf("Message ID: %s\nUser ID: %d\nContent: %s\n\n",
-					msg.MessageID, msg.UserID, msg.Content))
-			}
-
-			if err := os.WriteFile(filePath, buf.Bytes(), 0o600); err != nil {
-				a.textLogger.Error("Failed to save blocked messages",
-					zap.Error(err),
-					zap.String("path", filePath))
-
-				return
-			}
-
-			a.textLogger.Info("Saved blocked messages",
-				zap.String("path", filePath))
-		},
-	)
 	if err != nil {
 		return nil, err
 	}
 
-	// Validate message IDs against user IDs
-	a.validateMessageOwnership(messages, result)
-
-	return result, nil
+	return &result, nil
 }
 
-// validateMessageOwnership ensures flagged messages belong to the flagged users.
+// validateMessageOwnership ensures flagged messages exist in the original batch.
 func (a *MessageAnalyzer) validateMessageOwnership(
-	messages []*MessageContent, flaggedResults *FlaggedMessagesResponse,
+	messages []*MessageContent, flaggedUser *FlaggedMessageUser,
 ) {
-	// Build a map of message ID to user ID for quick lookups
-	messageToUser := make(map[string]uint64, len(messages))
+	// Build a set of valid message IDs
+	validMessageIDs := make(map[string]struct{}, len(messages))
 	for _, msg := range messages {
-		messageToUser[msg.MessageID] = msg.UserID
+		validMessageIDs[msg.MessageID] = struct{}{}
 	}
 
-	// For each flagged user, validate their messages
-	for i := 0; i < len(flaggedResults.Users); i++ {
-		user := &flaggedResults.Users[i]
-		validMessages := make([]FlaggedMessage, 0, len(user.Messages))
+	// Validate flagged messages
+	validMessages := make([]FlaggedMessage, 0, len(flaggedUser.Messages))
 
-		for _, msg := range user.Messages {
-			// Check if message exists and belongs to this user
-			if ownerID, exists := messageToUser[msg.MessageID]; exists && ownerID == user.UserID {
-				validMessages = append(validMessages, msg)
-			}
-		}
-
-		// Update user's messages to only include valid ones
-		user.Messages = validMessages
-
-		// If no valid messages remain, remove this user from the results
-		if len(user.Messages) == 0 {
-			flaggedResults.Users = slices.Delete(flaggedResults.Users, i, i+1)
-			i-- // Adjust index since we removed an element
+	for _, msg := range flaggedUser.Messages {
+		// Check if message exists in the original batch
+		if _, exists := validMessageIDs[msg.MessageID]; exists {
+			validMessages = append(validMessages, msg)
 		}
 	}
+
+	// Update messages to only include valid ones
+	flaggedUser.Messages = validMessages
 }

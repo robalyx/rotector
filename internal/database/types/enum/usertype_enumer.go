@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _UserTypeName = "ClearedFlaggedConfirmed"
+const _UserTypeName = "ClearedFlaggedConfirmedQueuedBloxDBMixedPastOffender"
 
-var _UserTypeIndex = [...]uint8{0, 7, 14, 23}
+var _UserTypeIndex = [...]uint8{0, 7, 14, 23, 29, 35, 40, 52}
 
-const _UserTypeLowerName = "clearedflaggedconfirmed"
+const _UserTypeLowerName = "clearedflaggedconfirmedqueuedbloxdbmixedpastoffender"
 
 func (i UserType) String() string {
 	if i < 0 || i >= UserType(len(_UserTypeIndex)-1) {
@@ -27,9 +27,13 @@ func _UserTypeNoOp() {
 	_ = x[UserTypeCleared-(0)]
 	_ = x[UserTypeFlagged-(1)]
 	_ = x[UserTypeConfirmed-(2)]
+	_ = x[UserTypeQueued-(3)]
+	_ = x[UserTypeBloxDB-(4)]
+	_ = x[UserTypeMixed-(5)]
+	_ = x[UserTypePastOffender-(6)]
 }
 
-var _UserTypeValues = []UserType{UserTypeCleared, UserTypeFlagged, UserTypeConfirmed}
+var _UserTypeValues = []UserType{UserTypeCleared, UserTypeFlagged, UserTypeConfirmed, UserTypeQueued, UserTypeBloxDB, UserTypeMixed, UserTypePastOffender}
 
 var _UserTypeNameToValueMap = map[string]UserType{
 	_UserTypeName[0:7]:        UserTypeCleared,
@@ -38,12 +42,24 @@ var _UserTypeNameToValueMap = map[string]UserType{
 	_UserTypeLowerName[7:14]:  UserTypeFlagged,
 	_UserTypeName[14:23]:      UserTypeConfirmed,
 	_UserTypeLowerName[14:23]: UserTypeConfirmed,
+	_UserTypeName[23:29]:      UserTypeQueued,
+	_UserTypeLowerName[23:29]: UserTypeQueued,
+	_UserTypeName[29:35]:      UserTypeBloxDB,
+	_UserTypeLowerName[29:35]: UserTypeBloxDB,
+	_UserTypeName[35:40]:      UserTypeMixed,
+	_UserTypeLowerName[35:40]: UserTypeMixed,
+	_UserTypeName[40:52]:      UserTypePastOffender,
+	_UserTypeLowerName[40:52]: UserTypePastOffender,
 }
 
 var _UserTypeNames = []string{
 	_UserTypeName[0:7],
 	_UserTypeName[7:14],
 	_UserTypeName[14:23],
+	_UserTypeName[23:29],
+	_UserTypeName[29:35],
+	_UserTypeName[35:40],
+	_UserTypeName[40:52],
 }
 
 // UserTypeString retrieves an enum value from the enum constants string name.

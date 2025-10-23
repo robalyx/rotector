@@ -7,7 +7,6 @@ import (
 // InappropriateMessage represents a flagged inappropriate message from a Discord user.
 type InappropriateMessage struct {
 	ServerID   uint64    `bun:",pk"        json:"serverId"`   // Discord server ID
-	ChannelID  uint64    `bun:",pk"        json:"channelId"`  // Discord channel ID
 	UserID     uint64    `bun:",pk"        json:"userId"`     // Discord user ID
 	MessageID  string    `bun:",pk"        json:"messageId"`  // Discord message ID
 	Content    string    `bun:",type:text" json:"content"`    // Message content

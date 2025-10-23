@@ -47,7 +47,6 @@ const (
 	UserSettingsPageName  = "User Settings"
 	SettingUpdatePageName = "Setting Update"
 
-	BanPageName           = "Ban Information"
 	CaptchaPageName       = "CAPTCHA Verification"
 	TimeoutPageName       = "Timeout"
 	LogPageName           = "Activity Logs"
@@ -176,11 +175,11 @@ const (
 	GenerateGroupReasonButtonCustomID   = "generate_group_reason"
 	GenerateProfileReasonButtonCustomID = "generate_profile_reason" + ModalOpenSuffix
 
-	GenerateProfileReasonModalCustomID     = "generate_profile_reason_modal"
-	ProfileReasonHintInputCustomID         = "profile_reason_hint_input"
-	ProfileReasonViolationInputCustomID    = "profile_reason_violation_input"
-	ProfileReasonLanguageInputCustomID     = "profile_reason_language_input"
-	ProfileReasonLanguageUsedInputCustomID = "profile_reason_language_used_input"
+	GenerateProfileReasonModalCustomID      = "generate_profile_reason_modal"
+	ProfileReasonHintInputCustomID          = "profile_reason_hint_input"
+	ProfileReasonFlaggedFieldsInputCustomID = "profile_reason_flagged_fields_input"
+	ProfileReasonLanguageInputCustomID      = "profile_reason_language_input"
+	ProfileReasonLanguageUsedInputCustomID  = "profile_reason_language_used_input"
 
 	PrevReviewButtonCustomID = "prev_review"
 	NextReviewButtonCustomID = "next_review"
@@ -243,6 +242,7 @@ const (
 const (
 	GroupViewMembersButtonCustomID = "group_view_members"
 	GroupViewLogsButtonCustomID    = "group_view_logs"
+	GroupDeleteButtonCustomID      = "group_delete"
 )
 
 // Group Review Menu - Members Viewer.
@@ -328,28 +328,18 @@ const (
 // Admin Menu.
 const (
 	BotSettingsButtonCustomID = "bot_settings"
-	BanUserButtonCustomID     = "ban_user" + ModalOpenSuffix
-	UnbanUserButtonCustomID   = "unban_user" + ModalOpenSuffix
 	DeleteUserButtonCustomID  = "delete_user" + ModalOpenSuffix
 	DeleteGroupButtonCustomID = "delete_group" + ModalOpenSuffix
 
-	BanUserModalCustomID     = "ban_user_modal"
-	UnbanUserModalCustomID   = "unban_user_modal"
 	DeleteUserModalCustomID  = "delete_user_modal"
 	DeleteGroupModalCustomID = "delete_group_modal"
 
-	BanUserInputCustomID     = "ban_user_input"
-	BanTypeInputCustomID     = "ban_type_input"
-	BanDurationInputCustomID = "ban_duration_input"
-	UnbanUserInputCustomID   = "unban_user_input"
 	DeleteUserInputCustomID  = "delete_user_input"
 	DeleteGroupInputCustomID = "delete_group_input"
 	AdminReasonInputCustomID = "admin_reason_input"
 
 	ActionButtonCustomID = "delete_confirm"
 
-	BanUserAction     = "ban_user"
-	UnbanUserAction   = "unban_user"
 	DeleteUserAction  = "delete_user"
 	DeleteGroupAction = "delete_group"
 )

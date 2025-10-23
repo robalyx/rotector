@@ -33,14 +33,14 @@ const (
 
 // OutfitThemeSummary contains a summary of a detected outfit theme.
 type OutfitThemeSummary struct {
-	OutfitName string `json:"outfitName" jsonschema_description:"Name of the outfit with a detected theme"`
-	Theme      string `json:"theme"      jsonschema_description:"Description of the specific theme detected"`
+	OutfitName string `json:"outfitName" jsonschema:"required,minLength=1,description=Name of the outfit with a detected theme"`
+	Theme      string `json:"theme"      jsonschema:"required,minLength=1,description=Description of the specific theme detected"`
 }
 
 // UserOutfitData represents the data for a user's outfit violations.
 type UserOutfitData struct {
-	Username string               `json:"username" jsonschema_description:"Username of the account being analyzed"`
-	Themes   []OutfitThemeSummary `json:"themes"   jsonschema_description:"List of outfit themes detected for this user"`
+	Username string               `json:"username" jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Themes   []OutfitThemeSummary `json:"themes"   jsonschema:"required,maxItems=20,description=List of outfit themes detected for this user"`
 }
 
 // UserOutfitRequest contains the user data and outfit violations for analysis.
@@ -51,25 +51,26 @@ type UserOutfitRequest struct {
 
 // OutfitAnalysis contains the result of analyzing a user's outfit violations.
 type OutfitAnalysis struct {
-	Name     string `json:"name"     jsonschema_description:"Username of the account being analyzed"`
-	Analysis string `json:"analysis" jsonschema_description:"Analysis of outfit violation patterns for this user"`
+	Name     string `json:"name"     jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Analysis string `json:"analysis" jsonschema:"required,minLength=1,description=Analysis of outfit violation patterns for this user"`
 }
 
 // BatchOutfitAnalysis contains results for multiple users' outfit violations.
 type BatchOutfitAnalysis struct {
-	Results []OutfitAnalysis `json:"results" jsonschema_description:"Array of outfit violation analyses for each user"`
+	Results []OutfitAnalysis `json:"results" jsonschema:"required,maxItems=50,description=Array of outfit violation analyses for each user"`
 }
 
 // OutfitReasonAnalyzer handles AI-based analysis of outfit violations using OpenAI models.
 type OutfitReasonAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	analysisSem *semaphore.Weighted
-	logger      *zap.Logger
-	textLogger  *zap.Logger
-	textDir     string
-	model       string
-	batchSize   int
+	chat          client.ChatCompletions
+	minify        *minify.M
+	analysisSem   *semaphore.Weighted
+	logger        *zap.Logger
+	textLogger    *zap.Logger
+	textDir       string
+	model         string
+	fallbackModel string
+	batchSize     int
 }
 
 // OutfitReasonAnalysisSchema is the JSON schema for the outfit analysis response.
@@ -89,14 +90,15 @@ func NewOutfitReasonAnalyzer(app *setup.App, logger *zap.Logger) *OutfitReasonAn
 	}
 
 	return &OutfitReasonAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitReasonAnalysis)),
-		logger:      logger.Named("ai_outfit_reason"),
-		textLogger:  textLogger,
-		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.OutfitReasonModel,
-		batchSize:   app.Config.Worker.BatchSizes.OutfitReasonAnalysisBatch,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitReasonAnalysis)),
+		logger:        logger.Named("ai_outfit_reason"),
+		textLogger:    textLogger,
+		textDir:       textDir,
+		model:         app.Config.Common.OpenAI.OutfitReasonModel,
+		fallbackModel: app.Config.Common.OpenAI.OutfitReasonFallbackModel,
+		batchSize:     app.Config.Worker.BatchSizes.OutfitReasonAnalysisBatch,
 	}
 }
 
@@ -198,7 +200,7 @@ func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
 	}
 
 	// Prevent infinite retries
-	if retryCount >= OutfitReasonMaxRetries {
+	if retryCount > OutfitReasonMaxRetries {
 		a.logger.Warn("Maximum retries reached for outfit analysis, skipping remaining users",
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", OutfitReasonMaxRetries),
@@ -228,6 +230,14 @@ func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
 			// Process the batch
 			batchResults, err := a.processOutfitBatch(ctx, batch)
 			if err != nil {
+				invalidMu.Lock()
+
+				for _, req := range batch {
+					invalidRequests[req.UserInfo.ID] = req
+				}
+
+				invalidMu.Unlock()
+
 				return err
 			}
 
@@ -350,7 +360,7 @@ func (a *OutfitReasonAnalyzer) processOutfitBatch(ctx context.Context, batch []U
 	// Make API request
 	var result BatchOutfitAnalysis
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)

@@ -2,6 +2,7 @@ package utils_test
 
 import (
 	"regexp"
+	"slices"
 	"testing"
 
 	"github.com/robalyx/rotector/pkg/utils"
@@ -11,10 +12,8 @@ import (
 func assertContainsBaseTerm(t *testing.T, variations []string, baseTerm string) {
 	t.Helper()
 
-	for _, variation := range variations {
-		if variation == baseTerm {
-			return
-		}
+	if slices.Contains(variations, baseTerm) {
+		return
 	}
 
 	t.Errorf("Base term '%s' not found in variations: %v", baseTerm, variations)
@@ -25,14 +24,7 @@ func assertContainsExpectedForms(t *testing.T, result []string, expected []strin
 	t.Helper()
 
 	for _, expectedForm := range expected {
-		found := false
-
-		for _, actual := range result {
-			if actual == expectedForm {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(result, expectedForm)
 
 		if !found {
 			t.Errorf("%s: Expected form '%s' not found in result: %v", testName, expectedForm, result)

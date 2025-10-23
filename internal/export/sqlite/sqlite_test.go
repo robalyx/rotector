@@ -37,6 +37,7 @@ func verifySQLiteFile(t *testing.T, filepath, tableName string, expectedRecords 
 					Reason:     stmt.ColumnText(2),
 					Confidence: stmt.ColumnFloat(3),
 				})
+
 				return nil
 			},
 		},
