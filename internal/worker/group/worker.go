@@ -156,12 +156,12 @@ func (w *Worker) Start(ctx context.Context) {
 		})
 
 		// Mark processed users in cache to prevent reprocessing
-		var processedUserIDs []int64
+		userCreationDates := make(map[int64]time.Time)
 		for _, user := range usersToProcess {
-			processedUserIDs = append(processedUserIDs, user.ID)
+			userCreationDates[user.ID] = user.CreatedAt
 		}
 
-		if err := w.db.Model().Cache().MarkUsersProcessed(ctx, processedUserIDs); err != nil {
+		if err := w.db.Service().Cache().MarkUsersProcessed(ctx, userCreationDates); err != nil {
 			w.logger.Error("Failed to mark users as processed in cache", zap.Error(err))
 		}
 

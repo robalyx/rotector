@@ -128,7 +128,7 @@ func (r *CacheModel) GetProcessingLogs(ctx context.Context, userIDs []int64) ([]
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		return r.db.NewSelect().
 			Model(&processedEntries).
-			Column("user_id", "last_processed").
+			Column("user_id", "last_processed", "next_scan_time").
 			Where("user_id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
 	})
@@ -143,28 +143,18 @@ func (r *CacheModel) GetProcessingLogs(ctx context.Context, userIDs []int64) ([]
 	return processedEntries, nil
 }
 
-// MarkUsersProcessed marks the given user IDs as processed with the current timestamp.
-func (r *CacheModel) MarkUsersProcessed(ctx context.Context, userIDs []int64) error {
-	if len(userIDs) == 0 {
+// MarkUsersProcessed marks the given users as processed with pre-calculated next scan times.
+func (r *CacheModel) MarkUsersProcessed(ctx context.Context, entries []*types.UserProcessingLog) error {
+	if len(entries) == 0 {
 		return nil
 	}
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
-		// Build entries for bulk insert
-		now := time.Now()
-		entries := make([]*types.UserProcessingLog, len(userIDs))
-
-		for i, userID := range userIDs {
-			entries[i] = &types.UserProcessingLog{
-				UserID:        userID,
-				LastProcessed: now,
-			}
-		}
-
 		_, err := r.db.NewInsert().
 			Model(&entries).
 			On("CONFLICT (user_id) DO UPDATE").
 			Set("last_processed = EXCLUDED.last_processed").
+			Set("next_scan_time = EXCLUDED.next_scan_time").
 			Exec(ctx)
 
 		return err
@@ -174,7 +164,7 @@ func (r *CacheModel) MarkUsersProcessed(ctx context.Context, userIDs []int64) er
 	}
 
 	r.logger.Debug("Successfully marked all users as processed",
-		zap.Int("userCount", len(userIDs)))
+		zap.Int("userCount", len(entries)))
 
 	return nil
 }

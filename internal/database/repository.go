@@ -113,13 +113,3 @@ func (r *Repository) Comment() *models.CommentModel {
 func (r *Repository) Cache() *models.CacheModel {
 	return r.cache
 }
-
-// Ivan returns the ivan model repository.
-func (r *Repository) Ivan() *models.IvanModel {
-	return r.ivan
-}
-
-// Cache returns the cache model repository.
-func (r *Repository) Cache() *models.CacheModel {
-	return r.cache
-}

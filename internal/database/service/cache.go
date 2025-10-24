@@ -41,11 +41,8 @@ func (s *CacheService) FilterProcessedUsers(ctx context.Context, users []*types.
 	unprocessedUsers, err := dbretry.Operation(ctx, func(ctx context.Context) ([]*types.ReviewUser, error) {
 		// Extract user IDs for query
 		userIDs := make([]int64, len(users))
-
-		userMap := make(map[int64]*types.ReviewUser, len(users))
 		for i, user := range users {
 			userIDs[i] = user.ID
-			userMap[user.ID] = user
 		}
 
 		// Get processing log entries
@@ -62,26 +59,12 @@ func (s *CacheService) FilterProcessedUsers(ctx context.Context, users []*types.
 			return users, nil
 		}
 
-		// Calculate which users are still within their processing interval
+		// Check which users are still within their processing cooldown
 		now := time.Now()
 		processedMap := make(map[int64]bool, len(processedEntries))
 
 		for _, entry := range processedEntries {
-			user, exists := userMap[entry.UserID]
-			if !exists {
-				s.logger.Warn("Processing log entry found for user not in provided list",
-					zap.Int64("userID", entry.UserID))
-
-				continue
-			}
-
-			// Calculate dynamic interval based on account age
-			interval := utils.CalculateProcessingInterval(user.CreatedAt)
-
-			// Check if user is still within their processing interval
-			nextAllowedTime := entry.LastProcessed.Add(interval)
-			if now.Before(nextAllowedTime) {
-				// User was processed recently and is still within cooldown
+			if now.Before(entry.NextScanTime) {
 				processedMap[entry.UserID] = true
 			}
 		}
@@ -109,4 +92,27 @@ func (s *CacheService) FilterProcessedUsers(ctx context.Context, users []*types.
 		zap.Float64("cacheHitRate", float64(cacheHits)/float64(len(users))*100))
 
 	return unprocessedUsers, nil
+}
+
+// MarkUsersProcessed marks users as processed with calculated times based on their account age.
+func (s *CacheService) MarkUsersProcessed(ctx context.Context, userCreationDates map[int64]time.Time) error {
+	if len(userCreationDates) == 0 {
+		return nil
+	}
+
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		now := time.Now()
+		entries := make([]*types.UserProcessingLog, 0, len(userCreationDates))
+
+		for userID, createdAt := range userCreationDates {
+			interval := utils.CalculateProcessingInterval(createdAt)
+			entries = append(entries, &types.UserProcessingLog{
+				UserID:        userID,
+				LastProcessed: now,
+				NextScanTime:  now.Add(interval),
+			})
+		}
+
+		return s.model.MarkUsersProcessed(ctx, entries)
+	})
 }

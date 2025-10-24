@@ -13,4 +13,5 @@ type UserFriendCount struct {
 type UserProcessingLog struct {
 	UserID        int64     `bun:",pk"      json:"userId"`        // User ID
 	LastProcessed time.Time `bun:",notnull" json:"lastProcessed"` // When the user was last processed
+	NextScanTime  time.Time `bun:",notnull" json:"nextScanTime"`  // When the user can be scanned again
 }
