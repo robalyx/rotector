@@ -42,10 +42,7 @@ func (s *CacheService) FilterProcessedUsers(ctx context.Context, userIDs []int64
 		// Get processing log entries
 		processedEntries, err := s.model.GetProcessingLogs(ctx, userIDs)
 		if err != nil {
-			s.logger.Warn("Failed to query processed users, returning all as unprocessed",
-				zap.Error(err))
-
-			return userIDs, nil
+			return nil, err
 		}
 
 		// If no users have been processed yet, return all as unprocessed

@@ -291,7 +291,7 @@ ONLY flag usernames/display names that UNAMBIGUOUSLY demonstrate predatory or in
 - Names with unambiguous references to genitalia (with ONLY sexual meanings, NOT words that commonly refer to sports/animals) [DANGER LEVEL 3]
 - Names containing "daddy", "mommy", or similar terms ONLY when combined with sexual context [DANGER LEVEL 4]
 - Names referencing BDSM/fetish terms explicitly [DANGER LEVEL 4]
-- Names containing ANY hypnosis-related terms ("hypno", "hypnosis", "trance", etc.)[DANGER LEVEL 5]
+- Names containing ANY hypnosis-related terms ("hypno", "hypnosis", "trance", etc.) [DANGER LEVEL 5]
 
 2. Predatory Authority:
 - Names that combine authority terms with inappropriate/suggestive context [DANGER LEVEL 3]
