@@ -560,16 +560,27 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdateEvent) {
 		oi := op.Index
 
 		// Bounds check
-		length := len(ml.items)
-		if op.Op == "INSERT" {
-			length++
-		}
+		switch op.Op {
+		case "DELETE":
+			// For DELETE, if index is out of bounds, skip silently.
+			// This is normal in lazy guilds when an unsynced member is removed.
+			if oi >= len(ml.items) {
+				continue
+			}
 
-		if length == 0 || length <= oi {
-			m.OnError(fmt.Errorf("%w: op=%s, len(ml.items)=%d, op.Index=%d",
-				ErrIndexOutOfRange, op.Op, len(ml.items), oi))
+		case "UPDATE":
+			// For UPDATE, if index is out of bounds, we can't update.
+			if oi >= len(ml.items) {
+				continue
+			}
 
-			continue
+		case "INSERT":
+			// For INSERT, check if we can insert at this position.
+			if oi > len(ml.items) {
+				m.OnError(fmt.Errorf("%w: op=%s, len(ml.items)=%d, op.Index=%d",
+					ErrIndexOutOfRange, op.Op, len(ml.items), oi))
+				continue
+			}
 		}
 
 		// https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html#operator

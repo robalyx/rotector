@@ -883,6 +883,7 @@ Category definitions and detection patterns:
    - Body modification/exaggeration (grossly disproportionate features)
    - Inflation fetish (blueberry, Willy Wonka references)
    - Giantess/giant fetish
+   - Hypnosis/hypno fetish (mind control, trance, spiral eyes)
    - Scatological content (fart/gas/smell/poop fetishes)
    - Heat themes (warrior cats mating cycles)
    - Any non-racial fetish content
