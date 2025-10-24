@@ -32,31 +32,25 @@ func NewCache(
 	}
 }
 
-// FilterProcessedUsers filters out users that have been processed within their dynamic processing interval.
-func (s *CacheService) FilterProcessedUsers(ctx context.Context, users []*types.ReviewUser) ([]*types.ReviewUser, error) {
-	if len(users) == 0 {
-		return users, nil
+// FilterProcessedUsers filters out user IDs that have been processed within their dynamic processing interval.
+func (s *CacheService) FilterProcessedUsers(ctx context.Context, userIDs []int64) ([]int64, error) {
+	if len(userIDs) == 0 {
+		return userIDs, nil
 	}
 
-	unprocessedUsers, err := dbretry.Operation(ctx, func(ctx context.Context) ([]*types.ReviewUser, error) {
-		// Extract user IDs for query
-		userIDs := make([]int64, len(users))
-		for i, user := range users {
-			userIDs[i] = user.ID
-		}
-
+	unprocessedIDs, err := dbretry.Operation(ctx, func(ctx context.Context) ([]int64, error) {
 		// Get processing log entries
 		processedEntries, err := s.model.GetProcessingLogs(ctx, userIDs)
 		if err != nil {
 			s.logger.Warn("Failed to query processed users, returning all as unprocessed",
 				zap.Error(err))
 
-			return users, nil
+			return userIDs, nil
 		}
 
 		// If no users have been processed yet, return all as unprocessed
 		if len(processedEntries) == 0 {
-			return users, nil
+			return userIDs, nil
 		}
 
 		// Check which users are still within their processing cooldown
@@ -69,11 +63,11 @@ func (s *CacheService) FilterProcessedUsers(ctx context.Context, users []*types.
 			}
 		}
 
-		// Filter out users that are within their processing interval
-		unprocessed := make([]*types.ReviewUser, 0, len(users))
-		for _, user := range users {
-			if !processedMap[user.ID] {
-				unprocessed = append(unprocessed, user)
+		// Filter out user IDs that are within their processing interval
+		unprocessed := make([]int64, 0, len(userIDs))
+		for _, userID := range userIDs {
+			if !processedMap[userID] {
+				unprocessed = append(unprocessed, userID)
 			}
 		}
 
@@ -83,15 +77,15 @@ func (s *CacheService) FilterProcessedUsers(ctx context.Context, users []*types.
 		return nil, err
 	}
 
-	cacheHits := len(users) - len(unprocessedUsers)
+	cacheHits := len(userIDs) - len(unprocessedIDs)
 
-	s.logger.Info("Filtered processed users with dynamic intervals",
-		zap.Int("totalUsers", len(users)),
-		zap.Int("unprocessedUsers", len(unprocessedUsers)),
+	s.logger.Info("Filtered processed user IDs with dynamic intervals",
+		zap.Int("totalUserIDs", len(userIDs)),
+		zap.Int("unprocessedUserIDs", len(unprocessedIDs)),
 		zap.Int("cacheHits", cacheHits),
-		zap.Float64("cacheHitRate", float64(cacheHits)/float64(len(users))*100))
+		zap.Float64("cacheHitRate", float64(cacheHits)/float64(len(userIDs))*100))
 
-	return unprocessedUsers, nil
+	return unprocessedIDs, nil
 }
 
 // MarkUsersProcessed marks users as processed with calculated times based on their account age.

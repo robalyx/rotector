@@ -176,11 +176,12 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 		// Get the next confirmed user
 		user, err := w.db.Model().User().GetUserToScan(ctx)
 		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
-				w.logger.Error("Error getting user to scan", zap.Error(err))
-			} else {
-				w.logger.Warn("No more users to scan", zap.Error(err))
+			if errors.Is(err, sql.ErrNoRows) {
+				w.logger.Warn("No more users to scan")
+				break
 			}
+
+			w.logger.Error("Error getting user to scan", zap.Error(err))
 
 			return validFriends, err
 		}
@@ -269,11 +270,8 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 		}
 
 		if len(friendIDs) > 0 {
-			// Fetch all friend user infos
-			allUserInfos := w.userFetcher.FetchInfos(ctx, friendIDs)
-
 			// Filter out users within their processing cooldown period
-			unprocessedUserInfos, err := w.db.Service().Cache().FilterProcessedUsers(ctx, allUserInfos)
+			unprocessedIDs, err := w.db.Service().Cache().FilterProcessedUsers(ctx, friendIDs)
 			if err != nil {
 				w.logger.Error("Error filtering processed users",
 					zap.Error(err),
@@ -282,18 +280,22 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 				continue
 			}
 
-			// Add unprocessed users to the validation list
-			if len(unprocessedUserInfos) > 0 {
-				validFriends = append(validFriends, unprocessedUserInfos...)
+			// Add fetched users to the validation list
+			if len(unprocessedIDs) > 0 {
+				userInfos := w.userFetcher.FetchInfos(ctx, unprocessedIDs)
 
-				w.logger.Debug("Added friends for processing",
-					zap.Int64("userID", user.ID),
-					zap.Int("totalFriends", len(userFriendIDs)),
-					zap.Int("existingFriends", len(existingUsers)),
-					zap.Int("fetchedFriends", len(friendIDs)),
-					zap.Int("allUserInfos", len(allUserInfos)),
-					zap.Int("unprocessedFriends", len(unprocessedUserInfos)),
-					zap.Int("totalValidFriends", len(validFriends)))
+				if len(userInfos) > 0 {
+					validFriends = append(validFriends, userInfos...)
+
+					w.logger.Debug("Added friends for processing",
+						zap.Int64("userID", user.ID),
+						zap.Int("totalFriends", len(userFriendIDs)),
+						zap.Int("existingFriends", len(existingUsers)),
+						zap.Int("newFriends", len(friendIDs)),
+						zap.Int("unprocessedFriends", len(unprocessedIDs)),
+						zap.Int("fetchedFriends", len(userInfos)),
+						zap.Int("totalValidFriends", len(validFriends)))
+				}
 			}
 		}
 	}

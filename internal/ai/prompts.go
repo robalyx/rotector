@@ -252,10 +252,11 @@ CRITICAL: ZERO EXCEPTIONS ENFORCEMENT: Rules marked "(ZERO EXCEPTIONS)" must res
 - References to "bbc" or "bwc" [DANGER LEVEL 4]
 - References to "BLM" when used in raceplay contexts [DANGER LEVEL 4]
 - Self-descriptive terms with common sexual or deviant connotations [DANGER LEVEL 4]
-- Fart/gas/smell references [DANGER LEVEL 4]
-- Poop references [DANGER LEVEL 3]
+- Fart/gas/smell fetish references [DANGER LEVEL 4]
+- Poop fetish references [DANGER LEVEL 3]
 - Inflation fetish references (including blueberry, Willy Wonka transformation references) [DANGER LEVEL 4]
 - Giantess/giant fetish references [DANGER LEVEL 4]
+- Hypnosis/hypno fetish references (mind control, trance, spiral eyes, hypno-related content) [DANGER LEVEL 5]
 - Other fetish references [DANGER LEVEL 3]
 
 4. Technical Evasion:
@@ -290,6 +291,7 @@ ONLY flag usernames/display names that UNAMBIGUOUSLY demonstrate predatory or in
 - Names with unambiguous references to genitalia (with ONLY sexual meanings, NOT words that commonly refer to sports/animals) [DANGER LEVEL 3]
 - Names containing "daddy", "mommy", or similar terms ONLY when combined with sexual context [DANGER LEVEL 4]
 - Names referencing BDSM/fetish terms explicitly [DANGER LEVEL 4]
+- Names containing ANY hypnosis-related terms ("hypno", "hypnosis", "trance", etc.)[DANGER LEVEL 5]
 
 2. Predatory Authority:
 - Names that combine authority terms with inappropriate/suggestive context [DANGER LEVEL 3]

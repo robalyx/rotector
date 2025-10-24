@@ -17,7 +17,7 @@ var (
 
 const (
 	// CurrentEngineVersion represents the current AI engine version for user processing.
-	CurrentEngineVersion = "2.24"
+	CurrentEngineVersion = "2.25"
 )
 
 // User represents a user in any state (flagged, confirmed, or cleared).
