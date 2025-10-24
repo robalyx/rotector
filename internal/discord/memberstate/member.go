@@ -33,6 +33,15 @@ var (
 	ErrIndexOutOfRange = errors.New("member list index out of range")
 )
 
+// Discord member list operation types.
+const (
+	OpSync       = "SYNC"
+	OpInvalidate = "INVALIDATE"
+	OpInsert     = "INSERT"
+	OpUpdate     = "UPDATE"
+	OpDelete     = "DELETE"
+)
+
 // State handles members and the member list.
 //
 // # Members
@@ -524,7 +533,7 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdateEvent) {
 
 	for i, op := range ev.Ops {
 		switch op.Op {
-		case "SYNC":
+		case OpSync:
 			start, end := op.Range[0], op.Range[1]
 			growItems(&ml.items, end+1)
 
@@ -534,7 +543,7 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdateEvent) {
 
 			continue
 
-		case "INVALIDATE":
+		case OpInvalidate:
 			start, end := op.Range[0], op.Range[1]
 
 			// Clamp range to valid bounds.
@@ -561,39 +570,40 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdateEvent) {
 
 		// Bounds check
 		switch op.Op {
-		case "DELETE":
+		case OpDelete:
 			// For DELETE, if index is out of bounds, skip silently.
 			// This is normal in lazy guilds when an unsynced member is removed.
 			if oi >= len(ml.items) {
 				continue
 			}
 
-		case "UPDATE":
+		case OpUpdate:
 			// For UPDATE, if index is out of bounds, we can't update.
 			if oi >= len(ml.items) {
 				continue
 			}
 
-		case "INSERT":
+		case OpInsert:
 			// For INSERT, check if we can insert at this position.
 			if oi > len(ml.items) {
 				m.OnError(fmt.Errorf("%w: op=%s, len(ml.items)=%d, op.Index=%d",
 					ErrIndexOutOfRange, op.Op, len(ml.items), oi))
+
 				continue
 			}
 		}
 
 		// https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html#operator
 		switch op.Op {
-		case "INSERT":
+		case OpInsert:
 			ml.items = append(ml.items, gateway.GuildMemberListOpItem{})
 			copy(ml.items[oi+1:], ml.items[oi:])
 			ml.items[oi] = op.Item
 
-		case "UPDATE":
+		case OpUpdate:
 			ml.items[oi] = op.Item
 
-		case "DELETE":
+		case OpDelete:
 			// Copy the old item into the Items field for future uses.
 			op.Item = ml.items[oi]
 			ev.Ops[i] = op
@@ -617,14 +627,14 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdateEvent) {
 func (m *State) onListUpdateState(ev *gateway.GuildMemberListUpdateEvent) {
 	for _, op := range ev.Ops {
 		switch op.Op {
-		case "SYNC", "INSERT", "UPDATE":
+		case OpSync, OpInsert, OpUpdate:
 			items := make([]gateway.GuildMemberListOpItem, len(op.Items), len(op.Items)+1)
 			copy(items, op.Items)
 
 			items = append(items, op.Item)
 			for i, item := range items {
 				if item.Member != nil {
-					update := op.Op == "UPDATE"
+					update := op.Op == OpUpdate
 					if err := m.state.MemberSet(ev.GuildID, &items[i].Member.Member, update); err != nil {
 						m.OnError(errors.Wrap(err, "failed to set member"))
 					}
