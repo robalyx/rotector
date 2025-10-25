@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var condoPattern = regexp.MustCompile(`(?i)\bcondo\b`)
+var condoPattern = regexp.MustCompile(`(?i)\bcondos?\b`)
 
 // CondoCheckerParams contains all the parameters needed for condo checker processing.
 type CondoCheckerParams struct {

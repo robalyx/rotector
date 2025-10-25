@@ -32,7 +32,8 @@ import (
 )
 
 const (
-	MaxOutfits = 100
+	InitialOutfitLimit = 20
+	MaxOutfits         = 100
 )
 
 var (
@@ -89,6 +90,32 @@ type DownloadResult struct {
 	similarOutfits  []string
 }
 
+// OutfitAnalysisResult contains the aggregated results from analyzing a set of outfits.
+type OutfitAnalysisResult struct {
+	suspiciousThemes   []string
+	flaggedOutfits     map[string]struct{}
+	highestConfidence  float64
+	uniqueFlaggedCount int
+	hasFurryTheme      bool
+}
+
+// merge combines another result into this one, aggregating all fields.
+func (r *OutfitAnalysisResult) merge(other *OutfitAnalysisResult) {
+	r.suspiciousThemes = append(r.suspiciousThemes, other.suspiciousThemes...)
+	for name := range other.flaggedOutfits {
+		r.flaggedOutfits[name] = struct{}{}
+	}
+
+	if other.highestConfidence > r.highestConfidence {
+		r.highestConfidence = other.highestConfidence
+	}
+
+	r.uniqueFlaggedCount += other.uniqueFlaggedCount
+	if other.hasFurryTheme {
+		r.hasFurryTheme = true
+	}
+}
+
 // NewOutfitAnalyzer creates an OutfitAnalyzer instance.
 func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 	// Get image logger
@@ -122,7 +149,6 @@ func (a *OutfitAnalyzer) ProcessUsers(
 	// Filter users based on inappropriate outfit flags and existing reasons
 	usersToProcess := a.filterUsersForOutfitProcessing(params.Users, params.ReasonsMap, params.InappropriateOutfitFlags)
 
-	// Skip if no users need outfit processing
 	if len(usersToProcess) == 0 {
 		a.logger.Info("No users to process outfits for")
 		return nil, nil
@@ -152,7 +178,7 @@ func (a *OutfitAnalyzer) ProcessUsers(
 
 		p.Go(func(ctx context.Context) error {
 			// Analyze user's outfits for themes
-			outfitNames, hasFurry, err := a.analyzeUserOutfits(ctx, userInfo, &mu, params.ReasonsMap, outfits, userThumbs)
+			outfitNames, hasFurry, err := a.analyzeUserOutfits(ctx, userInfo, &mu, params.ReasonsMap, outfits, userThumbs, params.InappropriateOutfitFlags)
 			if err != nil && !errors.Is(err, ErrNoViolations) {
 				a.logger.Error("Failed to analyze outfit themes",
 					zap.Error(err),
@@ -225,27 +251,127 @@ func (a *OutfitAnalyzer) filterUsersForOutfitProcessing(
 // analyzeUserOutfits handles the theme analysis of a single user's outfits.
 func (a *OutfitAnalyzer) analyzeUserOutfits(
 	ctx context.Context, info *types.ReviewUser, mu *sync.Mutex, reasonsMap map[int64]types.Reasons[enum.UserReasonType],
-	outfits []*apiTypes.Outfit, thumbnailMap map[int64]string,
+	outfits []*apiTypes.Outfit, thumbnailMap map[int64]string, inappropriateOutfitFlags map[int64]struct{},
 ) (map[string]struct{}, bool, error) {
-	// Download all outfit images
+	// Phase 1: Analyze initial outfits
+	result, err := a.analyzeOutfitRange(ctx, info, outfits, thumbnailMap, 0, InitialOutfitLimit)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Phase 2: Determine if we should scan remaining outfits
+	foundViolations := len(result.flaggedOutfits) > 0
+	_, isInInappropriateFlags := inappropriateOutfitFlags[info.ID]
+
+	if (foundViolations || isInInappropriateFlags) && len(outfits) > InitialOutfitLimit {
+		a.logger.Info("Proceeding with full outfit scan",
+			zap.Int64("userID", info.ID),
+			zap.String("username", info.Name),
+			zap.Bool("foundViolations", foundViolations),
+			zap.Bool("isInInappropriateFlags", isInInappropriateFlags))
+
+		result2, err := a.analyzeOutfitRange(ctx, info, outfits, thumbnailMap, InitialOutfitLimit, MaxOutfits)
+		if err != nil {
+			return nil, false, err
+		}
+
+		result.merge(result2)
+	}
+
+	// Determine flagging criteria based on number of suspicious outfits
+	shouldFlag := false
+	finalConfidence := result.highestConfidence
+
+	switch {
+	case result.uniqueFlaggedCount > 1 && result.highestConfidence >= 0.5:
+		shouldFlag = true
+	case result.uniqueFlaggedCount == 1 && result.highestConfidence >= 0.7:
+		shouldFlag = true
+		finalConfidence = result.highestConfidence * 0.6 // Reduce confidence by 40% for single outfit cases
+	default:
+		a.logger.Debug("AI did not flag user with outfit themes",
+			zap.Int64("userID", info.ID),
+			zap.String("username", info.Name),
+			zap.Float64("highestConfidence", result.highestConfidence),
+			zap.Int("uniqueFlaggedCount", result.uniqueFlaggedCount),
+			zap.Int("totalFlaggedOutfits", len(result.flaggedOutfits)))
+	}
+
+	if shouldFlag {
+		mu.Lock()
+
+		if _, exists := reasonsMap[info.ID]; !exists {
+			reasonsMap[info.ID] = make(types.Reasons[enum.UserReasonType])
+		}
+
+		reasonsMap[info.ID].Add(enum.UserReasonTypeOutfit, &types.Reason{
+			Message:    "User has outfits with inappropriate themes.",
+			Confidence: finalConfidence,
+			Evidence:   result.suspiciousThemes,
+		})
+		mu.Unlock()
+
+		a.logger.Info("AI flagged user with outfit themes",
+			zap.Int64("userID", info.ID),
+			zap.String("username", info.Name),
+			zap.Float64("finalConfidence", finalConfidence),
+			zap.Int("uniqueFlaggedOutfits", result.uniqueFlaggedCount),
+			zap.Int("totalFlaggedOutfits", len(result.flaggedOutfits)),
+			zap.Int("numThemes", len(result.suspiciousThemes)),
+			zap.Strings("themes", result.suspiciousThemes))
+
+		// Don't mark as furry user if they have 3+ inappropriate outfit violations
+		if result.uniqueFlaggedCount >= 3 {
+			result.hasFurryTheme = false
+		}
+	}
+
+	return result.flaggedOutfits, result.hasFurryTheme, nil
+}
+
+// analyzeOutfitRange analyzes a specified range of outfits.
+func (a *OutfitAnalyzer) analyzeOutfitRange(
+	ctx context.Context, info *types.ReviewUser, allOutfits []*apiTypes.Outfit,
+	thumbnailMap map[int64]string, start, end int,
+) (*OutfitAnalysisResult, error) {
+	// Validate and adjust range
+	start = max(0, start)
+	end = min(end, len(allOutfits), MaxOutfits)
+
+	// Extract outfit range
+	outfits := allOutfits[start:end]
+
+	// Download outfit images
 	downloads, err := a.downloadOutfitImages(ctx, info, outfits, thumbnailMap)
 	if err != nil {
 		if errors.Is(err, ErrNoOutfits) {
-			return nil, false, ErrNoViolations
+			return nil, ErrNoViolations
 		}
 
-		return nil, false, fmt.Errorf("failed to download outfit images: %w", err)
+		return nil, fmt.Errorf("failed to download outfit images: %w", err)
 	}
 
-	// Process outfits in batches
-	var (
-		allSuspiciousThemes []string
-		highestConfidence   float64
-		uniqueFlaggedCount  int
-		hasFurryTheme       bool
-	)
+	// Process outfits
+	result := a.processOutfitDownloads(ctx, info, downloads)
 
-	flaggedOutfits := make(map[string]struct{})
+	a.logger.Info("Completed outfit scan",
+		zap.Int64("userID", info.ID),
+		zap.String("username", info.Name),
+		zap.Int("start", start),
+		zap.Int("end", end),
+		zap.Int("outfitsScanned", len(downloads)),
+		zap.Int("flaggedOutfits", len(result.flaggedOutfits)))
+
+	return result, nil
+}
+
+// processOutfitDownloads processes a set of downloaded outfits and returns analysis results.
+func (a *OutfitAnalyzer) processOutfitDownloads(
+	ctx context.Context, info *types.ReviewUser, downloads []DownloadResult,
+) *OutfitAnalysisResult {
+	result := &OutfitAnalysisResult{
+		flaggedOutfits: make(map[string]struct{}),
+	}
 
 	for i := 0; i < len(downloads); i += a.batchSize {
 		end := min(i+a.batchSize, len(downloads))
@@ -273,7 +399,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 
 		// Track furry theme detection
 		if analysis.HasFurryTheme {
-			hasFurryTheme = true
+			result.hasFurryTheme = true
 		}
 
 		// Process themes from this batch
@@ -283,21 +409,21 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 				continue
 			}
 
-			allSuspiciousThemes = append(allSuspiciousThemes,
+			result.suspiciousThemes = append(result.suspiciousThemes,
 				fmt.Sprintf("%s|%s|%.2f", theme.OutfitName, theme.Theme, theme.Confidence))
 
-			flaggedOutfits[theme.OutfitName] = struct{}{}
-			uniqueFlaggedCount++
+			result.flaggedOutfits[theme.OutfitName] = struct{}{}
+			result.uniqueFlaggedCount++
 
 			// Also flag similar outfits that were deduplicated
 			for _, download := range batch {
 				if download.name == theme.OutfitName && len(download.similarOutfits) > 0 {
 					for _, similarOutfit := range download.similarOutfits {
-						similarConfidence := theme.Confidence * 0.9 // Reduce confidence by 10% for similar outfits
-						allSuspiciousThemes = append(allSuspiciousThemes,
+						similarConfidence := theme.Confidence * 0.8 // Reduce confidence by 20% for similar outfits
+						result.suspiciousThemes = append(result.suspiciousThemes,
 							fmt.Sprintf("%s|%s (similar to %s)|%.2f", similarOutfit, theme.Theme, theme.OutfitName, similarConfidence))
 
-						flaggedOutfits[similarOutfit] = struct{}{}
+						result.flaggedOutfits[similarOutfit] = struct{}{}
 
 						a.logger.Debug("Flagged similar outfit",
 							zap.String("originalOutfit", theme.OutfitName),
@@ -312,63 +438,13 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			}
 
 			// Track highest confidence
-			if theme.Confidence > highestConfidence {
-				highestConfidence = theme.Confidence
+			if theme.Confidence > result.highestConfidence {
+				result.highestConfidence = theme.Confidence
 			}
 		}
 	}
 
-	// Determine flagging criteria based on number of suspicious outfits
-	shouldFlag := false
-	finalConfidence := highestConfidence
-
-	switch {
-	case uniqueFlaggedCount > 1 && highestConfidence >= 0.5:
-		shouldFlag = true
-	case uniqueFlaggedCount == 1 && highestConfidence >= 0.7:
-		shouldFlag = true
-		finalConfidence = highestConfidence * 0.8 // Reduce confidence by 20% for single outfit cases
-	default:
-		a.logger.Debug("AI did not flag user with outfit themes",
-			zap.Int64("userID", info.ID),
-			zap.String("username", info.Name),
-			zap.Float64("highestConfidence", highestConfidence),
-			zap.Int("uniqueFlaggedCount", uniqueFlaggedCount),
-			zap.Int("totalFlaggedOutfits", len(flaggedOutfits)),
-			zap.Int("totalOutfits", len(downloads)),
-		)
-	}
-
-	if shouldFlag {
-		mu.Lock()
-
-		if _, exists := reasonsMap[info.ID]; !exists {
-			reasonsMap[info.ID] = make(types.Reasons[enum.UserReasonType])
-		}
-
-		reasonsMap[info.ID].Add(enum.UserReasonTypeOutfit, &types.Reason{
-			Message:    "User has outfits with inappropriate themes.",
-			Confidence: finalConfidence,
-			Evidence:   allSuspiciousThemes,
-		})
-		mu.Unlock()
-
-		a.logger.Info("AI flagged user with outfit themes",
-			zap.Int64("userID", info.ID),
-			zap.String("username", info.Name),
-			zap.Float64("finalConfidence", finalConfidence),
-			zap.Int("uniqueFlaggedOutfits", uniqueFlaggedCount),
-			zap.Int("totalFlaggedOutfits", len(flaggedOutfits)),
-			zap.Int("numThemes", len(allSuspiciousThemes)),
-			zap.Strings("themes", allSuspiciousThemes))
-
-		// Don't mark as furry user if they have 2+ inappropriate outfit violations
-		if uniqueFlaggedCount >= 2 {
-			hasFurryTheme = false
-		}
-	}
-
-	return flaggedOutfits, hasFurryTheme, nil
+	return result
 }
 
 // processOutfitBatch handles the AI analysis for a batch of outfit images.

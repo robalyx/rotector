@@ -39,8 +39,6 @@ type Worker struct {
 	friendFetcher    *fetcher.FriendFetcher
 	reporter         *core.StatusReporter
 	thresholdChecker *core.ThresholdChecker
-	processingCache  *core.UserProcessingCache
-	friendCountCache *core.FriendCountCache
 	pendingFriends   []*types.ReviewUser
 	logger           *zap.Logger
 	batchSize        int
@@ -60,8 +58,6 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		logger.Named("friend_worker"),
 		"friend worker",
 	)
-	processingCache := core.NewUserProcessingCache(app.RedisManager, logger)
-	friendCountCache := core.NewFriendCountCache(app.RedisManager, logger)
 
 	return &Worker{
 		db:               app.DB,
@@ -73,8 +69,6 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		friendFetcher:    friendFetcher,
 		reporter:         reporter,
 		thresholdChecker: thresholdChecker,
-		processingCache:  processingCache,
-		friendCountCache: friendCountCache,
 		pendingFriends:   make([]*types.ReviewUser, 0),
 		logger:           logger.Named("friend_worker"),
 		batchSize:        app.Config.Worker.BatchSizes.FriendUsers,
@@ -143,12 +137,12 @@ func (w *Worker) Start(ctx context.Context) {
 		})
 
 		// Mark processed users in cache to prevent reprocessing
-		var processedUserIDs []int64
+		userCreationDates := make(map[int64]time.Time)
 		for _, user := range userInfos[:w.batchSize] {
-			processedUserIDs = append(processedUserIDs, user.ID)
+			userCreationDates[user.ID] = user.CreatedAt
 		}
 
-		if err := w.processingCache.MarkUsersProcessed(ctx, processedUserIDs); err != nil {
+		if err := w.db.Service().Cache().MarkUsersProcessed(ctx, userCreationDates); err != nil {
 			w.logger.Error("Failed to mark users as processed in cache", zap.Error(err))
 		}
 
@@ -182,11 +176,12 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 		// Get the next confirmed user
 		user, err := w.db.Model().User().GetUserToScan(ctx)
 		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
-				w.logger.Error("Error getting user to scan", zap.Error(err))
-			} else {
-				w.logger.Warn("No more users to scan", zap.Error(err))
+			if errors.Is(err, sql.ErrNoRows) {
+				w.logger.Warn("No more users to scan")
+				break
 			}
+
+			w.logger.Error("Error getting user to scan", zap.Error(err))
 
 			return validFriends, err
 		}
@@ -201,7 +196,7 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 		currentFriendCount := len(userFriendIDs)
 
 		// Compare current friend count with cached value
-		friendCountChanged, err := w.friendCountCache.HasFriendCountChanged(ctx, user.ID, currentFriendCount)
+		friendCountChanged, err := w.db.Model().Cache().HasFriendCountChanged(ctx, user.ID, currentFriendCount)
 		if err != nil {
 			w.logger.Warn("Error checking friend count cache, proceeding with processing",
 				zap.Int64("userID", user.ID),
@@ -222,7 +217,7 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 		}
 
 		// Cache the current friend count
-		if err := w.friendCountCache.SetFriendCount(ctx, user.ID, currentFriendCount); err != nil {
+		if err := w.db.Model().Cache().SetFriendCount(ctx, user.ID, currentFriendCount); err != nil {
 			w.logger.Warn("Failed to cache friend count",
 				zap.Int64("userID", user.ID),
 				zap.Int("friendCount", currentFriendCount),
@@ -274,28 +269,33 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 			}
 		}
 
-		// Filter out already processed users to prevent duplicate processing
 		if len(friendIDs) > 0 {
-			unprocessedFriendIDs, err := w.processingCache.FilterProcessedUsers(ctx, friendIDs)
+			// Filter out users within their processing cooldown period
+			unprocessedIDs, err := w.db.Service().Cache().FilterProcessedUsers(ctx, friendIDs)
 			if err != nil {
-				w.logger.Error("Error filtering processed users", zap.Error(err), zap.Int64("userID", user.ID))
+				w.logger.Error("Error filtering processed users",
+					zap.Error(err),
+					zap.Int64("userID", user.ID))
 
-				unprocessedFriendIDs = friendIDs
+				continue
 			}
 
-			// Fetch user info and validate friends
-			if len(unprocessedFriendIDs) > 0 {
-				userInfos := w.userFetcher.FetchInfos(ctx, unprocessedFriendIDs)
-				validFriends = append(validFriends, userInfos...)
+			// Add fetched users to the validation list
+			if len(unprocessedIDs) > 0 {
+				userInfos := w.userFetcher.FetchInfos(ctx, unprocessedIDs)
 
-				w.logger.Debug("Added friends for processing",
-					zap.Int64("userID", user.ID),
-					zap.Int("totalFriends", len(userFriendIDs)),
-					zap.Int("existingFriends", len(existingUsers)),
-					zap.Int("fetchedFriends", len(friendIDs)),
-					zap.Int("unprocessedFriends", len(unprocessedFriendIDs)),
-					zap.Int("validFriends", len(userInfos)),
-					zap.Int("totalValidFriends", len(validFriends)))
+				if len(userInfos) > 0 {
+					validFriends = append(validFriends, userInfos...)
+
+					w.logger.Debug("Added friends for processing",
+						zap.Int64("userID", user.ID),
+						zap.Int("totalFriends", len(userFriendIDs)),
+						zap.Int("existingFriends", len(existingUsers)),
+						zap.Int("newFriends", len(friendIDs)),
+						zap.Int("unprocessedFriends", len(unprocessedIDs)),
+						zap.Int("fetchedFriends", len(userInfos)),
+						zap.Int("totalValidFriends", len(validFriends)))
+				}
 			}
 		}
 	}

@@ -8,7 +8,7 @@ request_timeout = 15000
 
 [worker.batch_sizes]
 # Number of friends to process in one batch
-friend_users = 100
+friend_users = 90
 # Number of group members to process in one batch
 group_users = 60
 # Number of users to check for bans in one batch
@@ -23,7 +23,7 @@ track_user_groups = 25
 queue_items = 10
 # Number of users to update thumbnails in one batch
 thumbnail_users = 25
-# Number of groups to update thumbnails in one batch 
+# Number of groups to update thumbnails in one batch
 thumbnail_groups = 25
 
 # Maximum concurrent AI requests for outfit analysis
@@ -46,9 +46,9 @@ message_analysis = 5
 # Number of outfits to analyze in one AI request
 outfit_analysis_batch = 16
 # Number of users to analyze in one AI request
-user_analysis_batch = 25
+user_analysis_batch = 20
 # Number of users to analyze in one user reason AI request
-user_reason_analysis_batch = 10
+user_reason_analysis_batch = 20
 # Number of users to analyze in one friend reason AI request
 friend_reason_analysis_batch = 20
 # Number of users to analyze in one group reason AI request
@@ -56,7 +56,7 @@ group_reason_analysis_batch = 20
 # Number of users to analyze in one outfit reason AI request
 outfit_reason_analysis_batch = 20
 # Number of users to analyze in one category AI request
-category_analysis_batch = 15
+category_analysis_batch = 20
 
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker
@@ -67,7 +67,7 @@ min_group_flagged_users = 10
 # Minimum percentage of flagged users needed to flag a group
 min_flagged_percentage = 40.0
 # Flag group if flagged users count exceeds this value, regardless of percentage
-min_flagged_override = 1000
+min_flagged_override = 200
 
 # Maximum group members before skipping tracking
 max_group_members_track = 20000

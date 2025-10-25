@@ -130,11 +130,11 @@ user_model = "gemini-2.5-flash"
 # Model to use for user reason analysis
 user_reason_model = "grok-4-fast"
 # Model to use for friend reason analysis
-friend_reason_model = "gemini-2.0-flash"
+friend_reason_model = "grok-4-fast"
 # Model to use for group reason analysis
-group_reason_model = "gemini-2.0-flash"
+group_reason_model = "grok-4-fast"
 # Model to use for outfit reason analysis
-outfit_reason_model = "gemini-2.0-flash"
+outfit_reason_model = "grok-4-fast"
 # Model to use for category analysis
 category_model = "grok-4-fast"
 # Model to use for stats analysis
@@ -166,14 +166,12 @@ message_fallback_model = "gpt-5-mini"
 # Model mappings for the provider
 [common.openai.model_mappings]
 "gemini-2.5-flash" = "google/gemini-2.5-flash"
-"gemini-2.0-flash" = "google/gemini-2.0-flash"
 "grok-4-fast" = "xai/grok-4-fast-non-reasoning"
 "gpt-5-mini" = "openai/gpt-5-mini"
 
 # Token pricing per model (cost per million tokens in USD)
 [common.openai.model_pricing]
 "gemini-2.5-flash" = { input = 0.30, completion = 2.50, reasoning = 2.50 }
-"gemini-2.0-flash" = { input = 0.10, completion = 0.40, reasoning = 0.40 }
 "grok-4-fast" = { input = 0.20, completion = 0.50, reasoning = 0.50 }
 "gpt-5-mini" = { input = 0.25, completion = 2.00, reasoning = 2.00 }
 

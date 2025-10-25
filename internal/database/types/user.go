@@ -17,7 +17,7 @@ var (
 
 const (
 	// CurrentEngineVersion represents the current AI engine version for user processing.
-	CurrentEngineVersion = "2.24"
+	CurrentEngineVersion = "2.25"
 )
 
 // User represents a user in any state (flagged, confirmed, or cleared).
@@ -46,8 +46,13 @@ type User struct {
 
 // IsNewAccount determines if the account is 7 days old or younger.
 func (u *User) IsNewAccount() bool {
-	if u.CreatedAt.IsZero() || u.CreatedAt.After(time.Now()) {
+	if u.CreatedAt.IsZero() {
 		return false
+	}
+
+	// Treat future dates as new accounts (likely data issues or very recent creation)
+	if u.CreatedAt.After(time.Now()) {
+		return true
 	}
 
 	return time.Since(u.CreatedAt) <= 7*24*time.Hour

@@ -20,7 +20,10 @@ import (
 	"go.uber.org/zap"
 )
 
-const MaxGroupsPerBatch = 10
+const (
+	MaxGroupsPerBatch        = 10
+	MaxConsecutiveEmptyPages = 3
+)
 
 // Worker processes group member lists by checking each member's
 // status and analyzing their profiles for inappropriate content.
@@ -33,13 +36,13 @@ type Worker struct {
 	userChecker               *checker.UserChecker
 	reporter                  *core.StatusReporter
 	thresholdChecker          *core.ThresholdChecker
-	processingCache           *core.UserProcessingCache
 	pendingUsers              []*types.ReviewUser
 	logger                    *zap.Logger
 	batchSize                 int
 	currentGroupID            int64
 	currentCursor             string
 	batchAttemptsWithoutFlags int
+	consecutiveEmptyPages     int
 }
 
 // New creates a new group worker.
@@ -55,7 +58,6 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		logger.Named("group_worker"),
 		"group worker",
 	)
-	processingCache := core.NewUserProcessingCache(app.RedisManager, logger)
 
 	return &Worker{
 		db:               app.DB,
@@ -66,7 +68,6 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		userChecker:      userChecker,
 		reporter:         reporter,
 		thresholdChecker: thresholdChecker,
-		processingCache:  processingCache,
 		pendingUsers:     make([]*types.ReviewUser, 0),
 		logger:           logger.Named("group_worker"),
 		batchSize:        app.Config.Worker.BatchSizes.GroupUsers,
@@ -159,12 +160,12 @@ func (w *Worker) Start(ctx context.Context) {
 		})
 
 		// Mark processed users in cache to prevent reprocessing
-		var processedUserIDs []int64
+		userCreationDates := make(map[int64]time.Time)
 		for _, user := range usersToProcess {
-			processedUserIDs = append(processedUserIDs, user.ID)
+			userCreationDates[user.ID] = user.CreatedAt
 		}
 
-		if err := w.processingCache.MarkUsersProcessed(ctx, processedUserIDs); err != nil {
+		if err := w.db.Service().Cache().MarkUsersProcessed(ctx, userCreationDates); err != nil {
 			w.logger.Error("Failed to mark users as processed in cache", zap.Error(err))
 		}
 
@@ -242,28 +243,18 @@ func (w *Worker) processGroup(ctx context.Context) ([]*types.ReviewUser, error) 
 
 		groupsAttempted++
 
-		// Filter out already processed users to prevent duplicate processing
+		// Add fetched users to the validation list
 		if len(userIDs) > 0 {
-			unprocessedUserIDs, err := w.processingCache.FilterProcessedUsers(ctx, userIDs)
-			if err != nil {
-				w.logger.Error("Error filtering processed users",
-					zap.Error(err),
-					zap.Int64("groupID", w.currentGroupID))
+			userInfos := w.userFetcher.FetchInfos(ctx, userIDs)
 
-				unprocessedUserIDs = userIDs
-			}
-
-			// Fetch user info and validate
-			if len(unprocessedUserIDs) > 0 {
-				userInfos := w.userFetcher.FetchInfos(ctx, unprocessedUserIDs)
+			if len(userInfos) > 0 {
 				validUsers = append(validUsers, userInfos...)
 
 				w.logger.Info("Processed group users",
 					zap.Int64("groupID", w.currentGroupID),
 					zap.String("cursor", w.currentCursor),
-					zap.Int("fetchedUsers", len(userIDs)),
-					zap.Int("unprocessedUsers", len(unprocessedUserIDs)),
-					zap.Int("validUsers", len(userInfos)),
+					zap.Int("unprocessedUsers", len(userIDs)),
+					zap.Int("fetchedUsers", len(userInfos)),
 					zap.Int("totalValidUsers", len(validUsers)),
 					zap.Int("groupsAttempted", groupsAttempted))
 			}
@@ -286,14 +277,15 @@ func (w *Worker) moveToNextGroup(ctx context.Context) error {
 	w.currentGroupID = 0
 	w.currentCursor = ""
 	w.batchAttemptsWithoutFlags = 0
+	w.consecutiveEmptyPages = 0
 
 	// Get next group
 	nextGroup, err := w.db.Model().Group().GetGroupToScan(ctx)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			w.logger.Error("Error getting next group to scan", zap.Error(err))
+		if errors.Is(err, sql.ErrNoRows) {
+			w.logger.Warn("No more groups to scan")
 		} else {
-			w.logger.Warn("No more groups to scan", zap.Error(err))
+			w.logger.Error("Error getting next group to scan", zap.Error(err))
 		}
 
 		return err
@@ -326,6 +318,10 @@ func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]int64, bool, er
 	// If the group has no users, get next group
 	if len(groupUsers.Data) == 0 {
 		if err := w.moveToNextGroup(ctx); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, false, nil
+			}
+
 			return nil, false, err
 		}
 
@@ -354,15 +350,52 @@ func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]int64, bool, er
 		}
 	}
 
+	// Filter out users that have been recently processed
+	unprocessedIDs, err := w.db.Service().Cache().FilterProcessedUsers(ctx, userIDs)
+	if err != nil {
+		w.logger.Error("Error filtering processed users", zap.Error(err))
+		return nil, true, nil
+	}
+
+	// Track consecutive pages with no users to process
+	if len(unprocessedIDs) == 0 {
+		w.consecutiveEmptyPages++
+
+		// Skip to next group if we've hit the threshold
+		if w.consecutiveEmptyPages >= MaxConsecutiveEmptyPages {
+			w.logger.Warn("Skipping group due to consecutive empty pages",
+				zap.Int64("groupID", w.currentGroupID),
+				zap.Int("consecutiveEmptyPages", w.consecutiveEmptyPages),
+				zap.Int("threshold", MaxConsecutiveEmptyPages))
+
+			if err := w.moveToNextGroup(ctx); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return nil, false, nil
+				}
+
+				return nil, false, err
+			}
+
+			return nil, true, nil
+		}
+	} else {
+		// Reset counter when we find users to process
+		w.consecutiveEmptyPages = 0
+	}
+
 	// Update cursor for next iteration
 	if groupUsers.NextPageCursor != nil {
 		w.currentCursor = *groupUsers.NextPageCursor
 	} else {
 		// No more pages for this group, move to next group
 		if err := w.moveToNextGroup(ctx); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, false, nil
+			}
+
 			return nil, false, err
 		}
 	}
 
-	return userIDs, true, nil
+	return unprocessedIDs, true, nil
 }

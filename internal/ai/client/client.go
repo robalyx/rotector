@@ -29,7 +29,8 @@ var (
 var defaultSettings = map[string]any{
 	"max_tokens": 8192,
 	"reasoning": map[string]any{
-		"enabled": false,
+		"enabled":    false,
+		"max_tokens": 1,
 	},
 }
 

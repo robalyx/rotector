@@ -21,6 +21,7 @@ type Repository struct {
 	sync     *models.SyncModel
 	message  *models.MessageModel
 	comment  *models.CommentModel
+	cache    *models.CacheModel
 }
 
 // NewRepository creates a new repository instance with all models.
@@ -39,6 +40,7 @@ func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 		sync:     models.NewSync(db, logger),
 		message:  models.NewMessage(db, logger),
 		comment:  models.NewComment(db, logger),
+		cache:    models.NewCache(db, logger),
 	}
 }
 
@@ -105,4 +107,9 @@ func (r *Repository) Message() *models.MessageModel {
 // Comment returns the comment model repository.
 func (r *Repository) Comment() *models.CommentModel {
 	return r.comment
+}
+
+// Cache returns the cache model repository.
+func (r *Repository) Cache() *models.CacheModel {
+	return r.cache
 }

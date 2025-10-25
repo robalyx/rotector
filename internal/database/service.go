@@ -15,6 +15,7 @@ type Service struct {
 	view     *service.ViewService
 	sync     *service.SyncService
 	comment  *service.CommentService
+	cache    *service.CacheService
 }
 
 // NewService creates a new service instance with all services.
@@ -28,6 +29,7 @@ func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service
 	syncModel := repository.Sync()
 	commentModel := repository.Comment()
 	trackingModel := repository.Tracking()
+	cacheModel := repository.Cache()
 
 	viewService := service.NewView(viewModel, logger)
 
@@ -39,6 +41,7 @@ func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service
 		view:     viewService,
 		sync:     service.NewSync(syncModel, logger),
 		comment:  service.NewComment(commentModel, logger),
+		cache:    service.NewCache(db, cacheModel, logger),
 	}
 }
 
@@ -75,4 +78,9 @@ func (s *Service) Sync() *service.SyncService {
 // Comment returns the comment service.
 func (s *Service) Comment() *service.CommentService {
 	return s.comment
+}
+
+// Cache returns the cache service.
+func (s *Service) Cache() *service.CacheService {
+	return s.cache
 }
