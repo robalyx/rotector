@@ -1313,16 +1313,22 @@ func (r *UserModel) DeleteUserInventory(ctx context.Context, tx bun.Tx, userIDs 
 	return totalAffected, nil
 }
 
-// GetUserToScan finds the next confirmed or flagged user to scan.
+// GetUserToScan finds the next confirmed user to scan with specific high-priority categories.
 func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 	var user types.User
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
-		// Try confirmed users with friend reason with at least one other reason OR profile reason without outfit reason
+		// Query confirmed users with specific high-priority categories
 		err := tx.NewSelect().Model(&user).
 			Where("status = ?", enum.UserTypeConfirmed).
 			Where("is_banned = false").
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
+			Where("category IN (?)", bun.In([]enum.UserCategoryType{
+				enum.UserCategoryTypePredatory,
+				enum.UserCategoryTypeCSAM,
+				enum.UserCategoryTypeSexual,
+				enum.UserCategoryTypeRaceplay,
+			})).
 			Where("(EXISTS (SELECT 1 FROM user_reasons ur1 WHERE ur1.user_id = \"user\".id AND reason_type = ?) AND "+
 				"EXISTS (SELECT 1 FROM user_reasons ur2 WHERE ur2.user_id = \"user\".id AND reason_type != ?)) OR "+
 				"(EXISTS (SELECT 1 FROM user_reasons ur3 WHERE ur3.user_id = \"user\".id AND reason_type = ?) AND "+
@@ -1332,63 +1338,27 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
-		if err == nil {
-			// Update last_scanned
-			_, err = tx.NewUpdate().Model(&user).
-				Set("last_scanned = ?", time.Now()).
-				Where("id = ?", user.ID).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf(
-					"failed to update last_scanned for confirmed user: %w (userID=%d)",
-					err, user.ID,
-				)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("no users available to scan: %w", err)
 			}
 
-			return nil
-		}
-
-		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("failed to query confirmed users: %w", err)
 		}
 
-		// If no confirmed users, try flagged users with profile reason and either friend or group reason excluding those with outfit reasons
-		err = tx.NewSelect().Model(&user).
-			Where("status = ?", enum.UserTypeFlagged).
-			Where("is_banned = false").
-			Where("last_scanned < NOW() - INTERVAL '1 day'").
-			Where("confidence >= 0.9").
-			Where("EXISTS (SELECT 1 FROM user_reasons ur WHERE ur.user_id = \"user\".id AND reason_type = ?)",
-				enum.UserReasonTypeProfile).
-			Where("EXISTS (SELECT 1 FROM user_reasons ur2 WHERE ur2.user_id = \"user\".id AND reason_type IN (?, ?))",
-				enum.UserReasonTypeFriend, enum.UserReasonTypeGroup).
-			Where("NOT EXISTS (SELECT 1 FROM user_reasons ur3 WHERE ur3.user_id = \"user\".id AND reason_type = ?)",
-				enum.UserReasonTypeOutfit).
-			OrderExpr("last_scanned ASC, confidence DESC").
-			Limit(1).
-			For("UPDATE SKIP LOCKED").
-			Scan(ctx)
-		if err == nil {
-			// Update last_scanned
-			_, err = tx.NewUpdate().Model(&user).
-				Set("last_scanned = ?", time.Now()).
-				Where("id = ?", user.ID).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf(
-					"failed to update last_scanned for flagged user: %w (userID=%d)",
-					err, user.ID,
-				)
-			}
-
-			return nil
+		// Update last_scanned
+		_, err = tx.NewUpdate().Model(&user).
+			Set("last_scanned = ?", time.Now()).
+			Where("id = ?", user.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to update last_scanned for confirmed user: %w (userID=%d)",
+				err, user.ID,
+			)
 		}
 
-		if !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("failed to query flagged users: %w", err)
-		}
-
-		return fmt.Errorf("no users available to scan: %w", err)
+		return nil
 	})
 	if err != nil {
 		return nil, err

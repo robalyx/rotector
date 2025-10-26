@@ -12,33 +12,33 @@ func init() { //nolint:funlen
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		_, err := db.NewRaw(`
 			-- User activity logs indexes
-			CREATE INDEX IF NOT EXISTS idx_activity_logs_time 
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_time
 			ON activity_logs (activity_timestamp DESC, sequence DESC);
 
-			CREATE INDEX IF NOT EXISTS idx_activity_logs_user_time 
-			ON activity_logs (user_id, activity_timestamp DESC, sequence DESC) 
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_user_time
+			ON activity_logs (user_id, activity_timestamp DESC, sequence DESC)
 			WHERE user_id > 0;
-			
-			CREATE INDEX IF NOT EXISTS idx_activity_logs_group_time 
-			ON activity_logs (group_id, activity_timestamp DESC, sequence DESC) 
+
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_group_time
+			ON activity_logs (group_id, activity_timestamp DESC, sequence DESC)
 			WHERE group_id > 0;
-			
-			CREATE INDEX IF NOT EXISTS idx_activity_logs_user_viewed 
+
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_user_viewed
 			ON activity_logs (reviewer_id, activity_timestamp DESC, activity_type, user_id)
 			WHERE user_id > 0 AND activity_type = ?;
 
-			CREATE INDEX IF NOT EXISTS idx_activity_logs_group_viewed 
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_group_viewed
 			ON activity_logs (reviewer_id, activity_timestamp DESC, activity_type, group_id)
 			WHERE group_id > 0 AND activity_type = ?;
-			
-			CREATE INDEX IF NOT EXISTS idx_activity_logs_reviewer_time 
+
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_reviewer_time
 			ON activity_logs (reviewer_id, activity_timestamp DESC, sequence DESC);
-			
-			CREATE INDEX IF NOT EXISTS idx_activity_logs_type_time 
+
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_type_time
 			ON activity_logs (activity_type, activity_timestamp DESC, sequence DESC);
-			
+
 			-- Group tracking indexes
-			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_check 
+			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_check
 			ON group_member_trackings (last_checked ASC)
 			WHERE is_flagged = false;
 
@@ -49,7 +49,7 @@ func init() { //nolint:funlen
 			ON group_member_tracking_users (user_id);
 
 			-- Outfit asset tracking indexes
-			CREATE INDEX IF NOT EXISTS idx_outfit_asset_trackings_check 
+			CREATE INDEX IF NOT EXISTS idx_outfit_asset_trackings_check
 			ON outfit_asset_trackings (last_checked ASC)
 			WHERE is_flagged = false;
 
@@ -65,7 +65,7 @@ func init() { //nolint:funlen
 			WHERE is_user_id = false;
 
 			-- Game tracking indexes
-			CREATE INDEX IF NOT EXISTS idx_game_trackings_check 
+			CREATE INDEX IF NOT EXISTS idx_game_trackings_check
 			ON game_trackings (last_checked ASC)
 			WHERE is_flagged = false;
 
@@ -81,23 +81,23 @@ func init() { //nolint:funlen
 
 			CREATE INDEX IF NOT EXISTS idx_groups_updated
 			ON groups (status, last_updated ASC, last_viewed ASC);
-			
+
 			CREATE INDEX IF NOT EXISTS idx_groups_recently_updated
 			ON groups (status, last_updated DESC, last_viewed ASC);
 
 			CREATE INDEX IF NOT EXISTS idx_groups_viewed
 			ON groups (status, last_viewed ASC);
 
-			CREATE INDEX IF NOT EXISTS idx_groups_scan_time 
+			CREATE INDEX IF NOT EXISTS idx_groups_scan_time
 			ON groups (status, is_locked, last_scanned ASC, confidence DESC);
 
-			CREATE INDEX IF NOT EXISTS idx_groups_lock_check 
+			CREATE INDEX IF NOT EXISTS idx_groups_lock_check
 			ON groups (status, last_lock_check ASC);
 
-			CREATE INDEX IF NOT EXISTS idx_groups_thumbnail_update 
+			CREATE INDEX IF NOT EXISTS idx_groups_thumbnail_update
 			ON groups (status, is_deleted, last_thumbnail_update ASC)
 			WHERE is_deleted = false;
-					
+
 			CREATE INDEX IF NOT EXISTS idx_groups_locked_status
 			ON groups (is_locked, status)
 			WHERE is_locked = true;
@@ -122,15 +122,16 @@ func init() { //nolint:funlen
 
 			CREATE INDEX IF NOT EXISTS idx_users_updated
 			ON users (status, last_updated ASC, last_viewed ASC);
-			
+
 			CREATE INDEX IF NOT EXISTS idx_users_recently_updated
 			ON users (status, last_updated DESC, last_viewed ASC);
 
 			CREATE INDEX IF NOT EXISTS idx_users_viewed
 			ON users (status, last_viewed ASC);
 
-			CREATE INDEX IF NOT EXISTS idx_users_scan_time 
-			ON users (status, is_banned, last_scanned ASC, confidence DESC);
+			CREATE INDEX IF NOT EXISTS idx_users_scan_time
+			ON users (status, category, is_banned, last_scanned ASC, confidence DESC)
+			WHERE category IN (0, 1, 2, 4);
 
 			CREATE INDEX IF NOT EXISTS idx_users_ban_check
 			ON users (status, last_ban_check ASC);
@@ -139,7 +140,7 @@ func init() { //nolint:funlen
 			ON users (status, last_group_check ASC)
 			WHERE is_banned = false;
 
-			CREATE INDEX IF NOT EXISTS idx_users_thumbnail_update 
+			CREATE INDEX IF NOT EXISTS idx_users_thumbnail_update
 			ON users (status, is_deleted, last_thumbnail_update ASC)
 			WHERE is_deleted = false;
 
@@ -168,7 +169,7 @@ func init() { //nolint:funlen
 			-- Discord server member indexes
 			CREATE INDEX IF NOT EXISTS idx_server_members_user_joined
 			ON discord_server_members (user_id, joined_at DESC);
-			
+
 			CREATE INDEX IF NOT EXISTS idx_server_members_updated_at
 			ON discord_server_members (updated_at);
 
@@ -191,7 +192,7 @@ func init() { //nolint:funlen
 			-- Inappropriate user summaries indexes
 			CREATE INDEX IF NOT EXISTS idx_inappropriate_summaries_message_count
 			ON inappropriate_user_summaries (message_count DESC);
-			
+
 			CREATE INDEX IF NOT EXISTS idx_inappropriate_summaries_last_detected
 			ON inappropriate_user_summaries (last_detected DESC);
 
@@ -204,10 +205,10 @@ func init() { //nolint:funlen
 			ON discord_user_full_scans (last_scan ASC);
 
 			-- Comments indexes
-			CREATE INDEX IF NOT EXISTS idx_user_comments_target_created 
+			CREATE INDEX IF NOT EXISTS idx_user_comments_target_created
 			ON user_comments (target_id, created_at DESC);
 
-			CREATE INDEX IF NOT EXISTS idx_user_comments_target_commenter 
+			CREATE INDEX IF NOT EXISTS idx_user_comments_target_commenter
 			ON user_comments (target_id, commenter_id);
 
 			-- Group comments indexes
@@ -250,7 +251,7 @@ func init() { //nolint:funlen
 
 			CREATE INDEX IF NOT EXISTS idx_outfit_assets_asset_id
 			ON outfit_assets (asset_id);
-			
+
 			CREATE INDEX IF NOT EXISTS idx_user_assets_user_id
 			ON user_assets (user_id);
 
