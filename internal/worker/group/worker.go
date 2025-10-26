@@ -21,28 +21,28 @@ import (
 )
 
 const (
-	MaxGroupsPerBatch        = 10
-	MaxConsecutiveEmptyPages = 3
+	MaxGroupsPerBatch           = 10
+	ExistingUserThreshold       = 0.90
+	VirtualPageSize             = 10
+	VirtualPageNoFlagsThreshold = 0.50
 )
 
 // Worker processes group member lists by checking each member's
 // status and analyzing their profiles for inappropriate content.
 type Worker struct {
-	db                        database.Client
-	roAPI                     *api.API
-	cfClient                  *cloudflare.Client
-	bar                       *components.ProgressBar
-	userFetcher               *fetcher.UserFetcher
-	userChecker               *checker.UserChecker
-	reporter                  *core.StatusReporter
-	thresholdChecker          *core.ThresholdChecker
-	pendingUsers              []*types.ReviewUser
-	logger                    *zap.Logger
-	batchSize                 int
-	currentGroupID            int64
-	currentCursor             string
-	batchAttemptsWithoutFlags int
-	consecutiveEmptyPages     int
+	db               database.Client
+	roAPI            *api.API
+	cfClient         *cloudflare.Client
+	bar              *components.ProgressBar
+	userFetcher      *fetcher.UserFetcher
+	userChecker      *checker.UserChecker
+	reporter         *core.StatusReporter
+	thresholdChecker *core.ThresholdChecker
+	pendingUsers     []*types.ReviewUser
+	logger           *zap.Logger
+	batchSize        int
+	currentGroupID   int64
+	currentCursor    string
 }
 
 // New creates a new group worker.
@@ -173,38 +173,21 @@ func (w *Worker) Start(ctx context.Context) {
 		w.bar.SetStepMessage("Processing completed", 95)
 		w.reporter.UpdateStatus("Processing completed", 95)
 
-		totalProblematicUsers := len(processResult.FlaggedUsers) + len(processResult.ConfirmedUsers)
-		if totalProblematicUsers > 0 {
-			// Reset counter when we find flagged or confirmed users
-			w.batchAttemptsWithoutFlags = 0
-		} else {
-			// Increment counter when no users are flagged
-			w.batchAttemptsWithoutFlags++
-			w.logger.Info("No users flagged in this batch",
-				zap.Int64("groupID", w.currentGroupID),
-				zap.Int("batchAttemptsWithoutFlags", w.batchAttemptsWithoutFlags),
-				zap.Int("processedUsers", len(usersToProcess)))
+		// Check if we should skip this group based on flag rate
+		if w.shouldSkipGroupByFlagRate(usersToProcess, processResult) {
+			if err := w.moveToNextGroup(ctx); err != nil {
+				w.reporter.SetHealthy(false)
 
-			// If we've had 1 batch without flags, move to next group
-			if w.batchAttemptsWithoutFlags >= 1 {
-				w.logger.Info("Moving to next group after 1 batch without flagged users",
-					zap.Int64("currentGroupID", w.currentGroupID),
-					zap.Int("batchAttemptsWithoutFlags", w.batchAttemptsWithoutFlags))
-
-				if err := w.moveToNextGroup(ctx); err != nil {
-					w.reporter.SetHealthy(false)
-
-					if !utils.ErrorSleep(ctx, 5*time.Minute, w.logger, "group worker") {
-						return
-					}
-
-					continue
+				if !utils.ErrorSleep(ctx, 5*time.Minute, w.logger, "group worker") {
+					return
 				}
-				// Clear pending users since we're moving to a new group
-				w.pendingUsers = nil
 
 				continue
 			}
+			// Clear pending users since we're moving to a new group
+			w.pendingUsers = nil
+
+			continue
 		}
 
 		// Step 5: Prepare for next batch
@@ -276,8 +259,6 @@ func (w *Worker) moveToNextGroup(ctx context.Context) error {
 	// Reset state
 	w.currentGroupID = 0
 	w.currentCursor = ""
-	w.batchAttemptsWithoutFlags = 0
-	w.consecutiveEmptyPages = 0
 
 	// Get next group
 	nextGroup, err := w.db.Model().Group().GetGroupToScan(ctx)
@@ -357,16 +338,20 @@ func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]int64, bool, er
 		return nil, true, nil
 	}
 
-	// Track consecutive pages with no users to process
-	if len(unprocessedIDs) == 0 {
-		w.consecutiveEmptyPages++
+	// Check if 90% or more users are already processed/exist (skip first page)
+	if w.currentCursor != "" {
+		totalUsers := len(newUserIDs)
+		processedUsers := totalUsers - len(unprocessedIDs)
+		existingPct := float64(processedUsers) / float64(totalUsers)
 
-		// Skip to next group if we've hit the threshold
-		if w.consecutiveEmptyPages >= MaxConsecutiveEmptyPages {
-			w.logger.Warn("Skipping group due to consecutive empty pages",
+		if existingPct >= ExistingUserThreshold {
+			w.logger.Info("Skipping group due to high existing user percentage",
 				zap.Int64("groupID", w.currentGroupID),
-				zap.Int("consecutiveEmptyPages", w.consecutiveEmptyPages),
-				zap.Int("threshold", MaxConsecutiveEmptyPages))
+				zap.Float64("existingPct", existingPct),
+				zap.Int("totalUsers", totalUsers),
+				zap.Int("processedUsers", processedUsers),
+				zap.Int("unprocessedUsers", len(unprocessedIDs)),
+				zap.Float64("threshold", ExistingUserThreshold))
 
 			if err := w.moveToNextGroup(ctx); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
@@ -378,9 +363,6 @@ func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]int64, bool, er
 
 			return nil, true, nil
 		}
-	} else {
-		// Reset counter when we find users to process
-		w.consecutiveEmptyPages = 0
 	}
 
 	// Update cursor for next iteration
@@ -398,4 +380,63 @@ func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]int64, bool, er
 	}
 
 	return unprocessedIDs, true, nil
+}
+
+// shouldSkipGroupByFlagRate analyzes virtual pages to determine if group should be skipped.
+// Returns true if 50% or more virtual pages have no flagged/confirmed users.
+func (w *Worker) shouldSkipGroupByFlagRate(usersToProcess []*types.ReviewUser, processResult *checker.ProcessResult) bool {
+	// Create map of flagged/confirmed user IDs for O(1) lookup
+	flaggedUserIDs := make(map[int64]bool, len(processResult.FlaggedUsers)+len(processResult.ConfirmedUsers))
+	for _, flagged := range processResult.FlaggedUsers {
+		flaggedUserIDs[flagged.ID] = true
+	}
+
+	for _, confirmed := range processResult.ConfirmedUsers {
+		flaggedUserIDs[confirmed.ID] = true
+	}
+
+	// Check virtual pages for flagged users
+	totalVirtualPages := (len(usersToProcess) + VirtualPageSize - 1) / VirtualPageSize
+	pagesWithoutFlags := 0
+
+	for i := range totalVirtualPages {
+		start := i * VirtualPageSize
+		end := min(start+VirtualPageSize, len(usersToProcess))
+
+		// Check if any users in this virtual page were flagged or confirmed
+		pageHasFlags := false
+
+		for j := start; j < end; j++ {
+			if flaggedUserIDs[usersToProcess[j].ID] {
+				pageHasFlags = true
+				break
+			}
+		}
+
+		if !pageHasFlags {
+			pagesWithoutFlags++
+		}
+	}
+
+	// Calculate percentage of pages without flags
+	noFlagsPct := float64(pagesWithoutFlags) / float64(totalVirtualPages)
+
+	w.logger.Info("Virtual page analysis",
+		zap.Int64("groupID", w.currentGroupID),
+		zap.Int("totalVirtualPages", totalVirtualPages),
+		zap.Int("pagesWithoutFlags", pagesWithoutFlags),
+		zap.Float64("noFlagsPct", noFlagsPct),
+		zap.Int("processedUsers", len(usersToProcess)))
+
+	// Return true if 50% or more virtual pages have no flags
+	if noFlagsPct >= VirtualPageNoFlagsThreshold {
+		w.logger.Info("Moving to next group due to low flag rate in virtual pages",
+			zap.Int64("currentGroupID", w.currentGroupID),
+			zap.Float64("noFlagsPct", noFlagsPct),
+			zap.Float64("threshold", VirtualPageNoFlagsThreshold))
+
+		return true
+	}
+
+	return false
 }
