@@ -123,10 +123,9 @@ func (m *SyncModel) GetDiscordUserGuildsByCursor(
 ) ([]*types.UserGuildInfo, *types.GuildCursor, error) {
 	var (
 		members    []*types.DiscordServerMember
+		guilds     []*types.UserGuildInfo
 		nextCursor *types.GuildCursor
 	)
-
-	guilds := make([]*types.UserGuildInfo, len(members))
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		// Build base query
@@ -153,6 +152,7 @@ func (m *SyncModel) GetDiscordUserGuildsByCursor(
 		}
 
 		// Convert to UserGuildInfo slice
+		guilds = make([]*types.UserGuildInfo, len(members))
 		for i, member := range members {
 			guilds[i] = &types.UserGuildInfo{
 				ServerID:  member.ServerID,
