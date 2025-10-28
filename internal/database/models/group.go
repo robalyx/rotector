@@ -664,63 +664,89 @@ func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int)
 	return groups, nil
 }
 
-// DeleteGroup removes a group and all associated data from the database.
-func (r *GroupModel) DeleteGroup(ctx context.Context, groupID int64) (bool, error) {
+// DeleteGroups removes groups and their associated data from the database.
+func (r *GroupModel) DeleteGroups(ctx context.Context, groupIDs []int64) (int64, error) {
+	if len(groupIDs) == 0 {
+		return 0, nil
+	}
+
 	var totalAffected int64
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
-		// Delete group reasons
-		result, err := tx.NewDelete().
-			Model((*types.GroupReason)(nil)).
-			Where("group_id = ?", groupID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete group reasons: %w", err)
-		}
+		var err error
 
-		affected, _ := result.RowsAffected()
-		totalAffected += affected
+		totalAffected, err = r.DeleteGroupsWithTx(ctx, tx, groupIDs)
 
-		// Delete group
-		result, err = tx.NewDelete().
-			Model((*types.Group)(nil)).
-			Where("id = ?", groupID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete group: %w", err)
-		}
-
-		affected, _ = result.RowsAffected()
-		totalAffected += affected
-
-		// Delete verification if exists
-		result, err = tx.NewDelete().
-			Model((*types.GroupVerification)(nil)).
-			Where("group_id = ?", groupID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete verification record: %w", err)
-		}
-
-		affected, _ = result.RowsAffected()
-		totalAffected += affected
-
-		// Delete mixed classification if exists
-		result, err = tx.NewDelete().
-			Model((*types.GroupMixedClassification)(nil)).
-			Where("group_id = ?", groupID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete mixed classification record: %w", err)
-		}
-
-		affected, _ = result.RowsAffected()
-		totalAffected += affected
-
-		return nil
+		return err
 	})
+	if err != nil {
+		return 0, err
+	}
 
-	return totalAffected > 0, err
+	return totalAffected, nil
+}
+
+// DeleteGroupsWithTx removes groups and their associated data using the provided transaction.
+func (r *GroupModel) DeleteGroupsWithTx(ctx context.Context, tx bun.Tx, groupIDs []int64) (int64, error) {
+	if len(groupIDs) == 0 {
+		return 0, nil
+	}
+
+	var totalAffected int64
+
+	// Delete group reasons
+	result, err := tx.NewDelete().
+		Model((*types.GroupReason)(nil)).
+		Where("group_id IN (?)", bun.In(groupIDs)).
+		Exec(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete group reasons: %w", err)
+	}
+
+	affected, _ := result.RowsAffected()
+	totalAffected += affected
+
+	// Delete groups
+	result, err = tx.NewDelete().
+		Model((*types.Group)(nil)).
+		Where("id IN (?)", bun.In(groupIDs)).
+		Exec(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete groups: %w", err)
+	}
+
+	affected, _ = result.RowsAffected()
+	totalAffected += affected
+
+	// Delete verifications
+	result, err = tx.NewDelete().
+		Model((*types.GroupVerification)(nil)).
+		Where("group_id IN (?)", bun.In(groupIDs)).
+		Exec(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete verifications: %w", err)
+	}
+
+	affected, _ = result.RowsAffected()
+	totalAffected += affected
+
+	// Delete mixed classifications
+	result, err = tx.NewDelete().
+		Model((*types.GroupMixedClassification)(nil)).
+		Where("group_id IN (?)", bun.In(groupIDs)).
+		Exec(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete mixed classifications: %w", err)
+	}
+
+	affected, _ = result.RowsAffected()
+	totalAffected += affected
+
+	r.logger.Debug("Deleted groups and their core data",
+		zap.Int("count", len(groupIDs)),
+		zap.Int64("affectedRows", totalAffected))
+
+	return totalAffected, nil
 }
 
 // GetGroupToScan finds the next group to scan.

@@ -3,6 +3,8 @@ package commands
 import (
 	"errors"
 
+	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/robalyx/rotector/internal/cloudflare"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/uptrace/bun/migrate"
 	"go.uber.org/zap"
@@ -18,5 +20,7 @@ var (
 type CLIDependencies struct {
 	DB       database.Client
 	Migrator *migrate.Migrator
+	CFClient *cloudflare.Client
+	RoAPI    *api.API
 	Logger   *zap.Logger
 }

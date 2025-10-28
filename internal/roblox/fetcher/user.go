@@ -43,7 +43,7 @@ func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 		logger:           logger.Named("user_fetcher"),
 		groupFetcher:     NewGroupFetcher(app.RoAPI, logger),
 		gameFetcher:      NewGameFetcher(app.RoAPI, logger),
-		friendFetcher:    NewFriendFetcher(app, logger),
+		friendFetcher:    NewFriendFetcher(app.DB, app.RoAPI, logger),
 		outfitFetcher:    NewOutfitFetcher(app.RoAPI, logger),
 		thumbnailFetcher: NewThumbnailFetcher(app.RoAPI, logger),
 		inventoryFetcher: NewInventoryFetcher(app.RoAPI, logger),

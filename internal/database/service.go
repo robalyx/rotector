@@ -35,7 +35,7 @@ func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service
 
 	return &Service{
 		user:     service.NewUser(db, userModel, activityModel, trackingModel, logger),
-		group:    service.NewGroup(db, groupModel, activityModel, logger),
+		group:    service.NewGroup(db, groupModel, activityModel, trackingModel, logger),
 		reviewer: service.NewReviewer(reviewerModel, viewService, logger),
 		stats:    service.NewStats(statsModel, userModel, groupModel, logger),
 		view:     viewService,

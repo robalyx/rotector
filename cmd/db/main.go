@@ -5,10 +5,15 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
+	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/robalyx/rotector/cmd/db/commands"
+	"github.com/robalyx/rotector/internal/cloudflare"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/migrations"
+	"github.com/robalyx/rotector/internal/redis"
+	"github.com/robalyx/rotector/internal/setup/client"
 	"github.com/robalyx/rotector/internal/setup/config"
 	"github.com/uptrace/bun/migrate"
 	"github.com/urfave/cli/v3"
@@ -34,6 +39,8 @@ func run() error {
 	cmdDeps := &commands.CLIDependencies{
 		DB:       deps.db,
 		Migrator: deps.migrator,
+		CFClient: deps.cfClient,
+		RoAPI:    deps.roAPI,
 		Logger:   deps.logger,
 	}
 
@@ -45,6 +52,7 @@ func run() error {
 	allCommands = append(allCommands, commands.AnalysisCommands(cmdDeps)...)
 	allCommands = append(allCommands, commands.FriendCleanupCommands(cmdDeps)...)
 	allCommands = append(allCommands, commands.GroupCleanupCommands(cmdDeps)...)
+	allCommands = append(allCommands, commands.DeletionCommands(cmdDeps)...)
 
 	app := &cli.Command{
 		Name:     "db",
@@ -59,13 +67,17 @@ func run() error {
 type cliDependencies struct {
 	db       database.Client
 	migrator *migrate.Migrator
+	cfClient *cloudflare.Client
+	roAPI    *api.API
 	logger   *zap.Logger
 }
 
 // setupDependencies initializes all dependencies needed by the CLI.
 func setupDependencies() (*cliDependencies, error) {
+	ctx := context.Background()
+
 	// Load full configuration
-	cfg, _, err := config.LoadConfig()
+	cfg, configDir, err := config.LoadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
@@ -77,7 +89,7 @@ func setupDependencies() (*cliDependencies, error) {
 	}
 
 	// Connect to database
-	db, err := database.NewConnection(context.Background(), &cfg.Common.PostgreSQL, logger, false)
+	db, err := database.NewConnection(ctx, &cfg.Common.PostgreSQL, logger, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -85,9 +97,26 @@ func setupDependencies() (*cliDependencies, error) {
 	// Create migrator using database connection and migrations
 	migrator := migrate.NewMigrator(db.DB(), migrations.Migrations)
 
+	// Initialize Cloudflare client
+	cfClient := cloudflare.NewClient(cfg, db, logger)
+
+	// Initialize Redis manager for RoAPI client
+	redisManager := redis.NewManager(&cfg.Common.Redis, logger)
+
+	// Initialize Roblox API client with proper configuration
+	roAPI, _, err := client.GetRoAPIClient(ctx, &cfg.Common, configDir, redisManager, logger, 30*time.Second)
+	if err != nil {
+		db.Close()
+		redisManager.Close()
+
+		return nil, fmt.Errorf("failed to initialize RoAPI client: %w", err)
+	}
+
 	return &cliDependencies{
 		db:       db,
 		migrator: migrator,
+		cfClient: cfClient,
+		roAPI:    roAPI,
 		logger:   logger,
 	}, nil
 }

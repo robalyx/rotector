@@ -477,7 +477,7 @@ func (m *ReviewMenu) handleDeleteGroup(ctx *interaction.Context, s *session.Sess
 	reviewerID := uint64(ctx.Event().User().ID)
 
 	// Delete group from database
-	found, err := m.layout.db.Model().Group().DeleteGroup(ctx.Context(), group.ID)
+	affected, err := m.layout.db.Service().Group().DeleteGroups(ctx.Context(), []int64{group.ID})
 	if err != nil {
 		m.layout.logger.Error("Failed to delete group", zap.Error(err))
 		ctx.Error("Failed to delete the group. Please try again.")
@@ -485,16 +485,9 @@ func (m *ReviewMenu) handleDeleteGroup(ctx *interaction.Context, s *session.Sess
 		return
 	}
 
-	if !found {
+	if affected == 0 {
 		ctx.Error("Group not found in database.")
 		return
-	}
-
-	// Remove from tracking
-	if err := m.layout.db.Model().Tracking().RemoveGroupsFromTracking(ctx.Context(), []int64{group.ID}); err != nil {
-		m.layout.logger.Error("Failed to remove group from tracking",
-			zap.Error(err),
-			zap.Int64("groupID", group.ID))
 	}
 
 	// Add to exclusion list to prevent future tracking

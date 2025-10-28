@@ -11,7 +11,6 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/resources/users"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/database"
-	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
@@ -25,10 +24,10 @@ type FriendFetcher struct {
 }
 
 // NewFriendFetcher creates a FriendFetcher with the provided API client and logger.
-func NewFriendFetcher(app *setup.App, logger *zap.Logger) *FriendFetcher {
+func NewFriendFetcher(db database.Client, roAPI *api.API, logger *zap.Logger) *FriendFetcher {
 	return &FriendFetcher{
-		db:     app.DB,
-		roAPI:  app.RoAPI,
+		db:     db,
+		roAPI:  roAPI,
 		logger: logger.Named("friend_fetcher"),
 	}
 }

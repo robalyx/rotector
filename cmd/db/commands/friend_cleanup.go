@@ -1,43 +1,60 @@
 package commands
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
-	"time"
+	"strings"
 
-	"github.com/robalyx/rotector/internal/database"
-	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
-	"github.com/robalyx/rotector/internal/setup"
-	"github.com/robalyx/rotector/internal/setup/telemetry"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
 )
 
 var (
-	ErrUserIDRequired = errors.New("USER_ID argument required")
-	ErrInvalidUserID  = errors.New("invalid user ID: must be a number")
+	ErrUserIDRequired    = errors.New("USER_ID argument required in single mode")
+	ErrInvalidUserID     = errors.New("invalid user ID: must be a number")
+	ErrUserIDInMultiMode = errors.New("do not provide USER_ID argument in multi mode")
 )
 
 // FriendCleanupCommands returns all friend cleanup-related commands.
 func FriendCleanupCommands(deps *CLIDependencies) []*cli.Command {
 	return []*cli.Command{
 		{
-			Name:      "clean-flagged-friends",
-			Usage:     "Remove flagged friends from a user's friend list",
-			ArgsUsage: "USER_ID",
-			Description: `Clean flagged friends for a specific user:
-  - USER_ID: The Roblox user ID to fetch friends for (required)
+			Name:      "clean-friends",
+			Usage:     "Remove inappropriate friends from user(s) friend list",
+			ArgsUsage: "[USER_ID]",
+			Description: `Clean friends for specific user(s):
+  - USER_ID: Single Roblox user ID (required in single mode)
+  - --multi: Enable multi-user mode with text editor
+  - --status: Filter by status - 'flagged', 'confirmed', or 'both' (default: 'both')
   - --batch-size: Number of users to process in each batch (default: 100)
 
-Examples:
-  db clean-flagged-friends 12345                    # Clean flagged friends for user 12345
-  db clean-flagged-friends 12345 --batch-size 50   # Clean with smaller batch size`,
+Single user mode:
+  db clean-friends 12345                           # Clean both flagged and confirmed friends
+  db clean-friends 12345 --status flagged         # Clean only flagged friends
+  db clean-friends 12345 --status confirmed       # Clean only confirmed friends
+
+Multi-user mode (opens text editor):
+  db clean-friends --multi                         # Clean friends for multiple users
+  db clean-friends --multi --status flagged       # Clean only flagged friends for multiple users`,
 			Flags: []cli.Flag{
+				&cli.BoolFlag{
+					Name:    "multi",
+					Usage:   "Enable multi-user mode with text editor",
+					Aliases: []string{"m"},
+				},
+				&cli.StringFlag{
+					Name:    "status",
+					Usage:   "Filter by status: 'flagged', 'confirmed', or 'both'",
+					Value:   "both",
+					Aliases: []string{"s"},
+				},
 				&cli.IntFlag{
 					Name:    "batch-size",
 					Usage:   "Number of users to process in each batch",
@@ -45,169 +62,221 @@ Examples:
 					Aliases: []string{"b"},
 				},
 			},
-			Action: handleCleanFlaggedFriends(deps),
+			Action: handleCleanFriends(deps),
 		},
 	}
 }
 
-// handleCleanFlaggedFriends handles the 'clean-flagged-friends' command.
-func handleCleanFlaggedFriends(deps *CLIDependencies) cli.ActionFunc {
+// handleCleanFriends handles the 'clean-friends' command.
+func handleCleanFriends(deps *CLIDependencies) cli.ActionFunc {
 	return func(ctx context.Context, c *cli.Command) error {
-		if c.Args().Len() != 1 {
-			return ErrUserIDRequired
-		}
-
-		// Parse user ID
-		userIDStr := c.Args().First()
-
-		userID, err := strconv.ParseInt(userIDStr, 10, 64)
-		if err != nil {
-			return fmt.Errorf("%w: %q", ErrInvalidUserID, userIDStr)
-		}
-
-		// Get batch size from flag
+		multiMode := c.Bool("multi")
+		statusFilter := c.String("status")
 		batchSize := max(c.Int("batch-size"), 10)
 
+		// Parse status filter
+		statuses, err := parseStatusFilter(statusFilter)
+		if err != nil {
+			return err
+		}
+
+		// Get user IDs based on mode
+		var userIDs []int64
+
+		if multiMode {
+			// Multi-user mode with text editor
+			if c.Args().Len() > 0 {
+				return ErrUserIDInMultiMode
+			}
+
+			userIDs, err = getUserIDsFromEditor(ctx, "friend cleanup")
+			if err != nil {
+				return err
+			}
+
+			if len(userIDs) == 0 {
+				fmt.Println("No valid user IDs found.")
+				return nil
+			}
+
+			fmt.Printf("Found %d user IDs to process.\n\n", len(userIDs))
+		} else {
+			// Single user mode
+			if c.Args().Len() != 1 {
+				return ErrUserIDRequired
+			}
+
+			userIDStr := c.Args().First()
+
+			userID, err := strconv.ParseInt(userIDStr, 10, 64)
+			if err != nil {
+				return fmt.Errorf("%w: %q", ErrInvalidUserID, userIDStr)
+			}
+
+			userIDs = []int64{userID}
+		}
+
 		deps.Logger.Info("Starting friend cleanup process",
-			zap.Int64("userID", userID),
+			zap.Int("userCount", len(userIDs)),
 			zap.Int("batchSize", batchSize))
 
-		// Initialize application
-		app, err := setup.InitializeApp(ctx, telemetry.ServiceExport, "logs/cli", "db", "friend-cleanup")
-		if err != nil {
-			return fmt.Errorf("failed to initialize app: %w", err)
-		}
+		// Process each user
+		var totalInappropriateFriends int
 
-		// Create friend fetcher
-		friendFetcher := fetcher.NewFriendFetcher(app, app.Logger)
+		for i, userID := range userIDs {
+			if len(userIDs) > 1 {
+				fmt.Printf("\n[%d/%d] Processing user %d...\n", i+1, len(userIDs), userID)
+			}
 
-		// Fetch friends for the user
-		deps.Logger.Info("Fetching friends for user", zap.Int64("userID", userID))
-
-		friendIDs, err := friendFetcher.GetFriendIDs(ctx, userID)
-		if err != nil {
-			return fmt.Errorf("failed to fetch friend IDs for user %d: %w", userID, err)
-		}
-
-		if len(friendIDs) == 0 {
-			deps.Logger.Info("No friends found for user", zap.Int64("userID", userID))
-			return nil
-		}
-
-		deps.Logger.Info("Fetched friend IDs",
-			zap.Int64("userID", userID),
-			zap.Int("friendCount", len(friendIDs)))
-
-		// Find which friends are flagged in our system
-		flaggedFriends, err := getUsersByStatus(ctx, app.DB, friendIDs, enum.UserTypeFlagged)
-		if err != nil {
-			return fmt.Errorf("failed to check friend status: %w", err)
-		}
-
-		if len(flaggedFriends) == 0 {
-			deps.Logger.Info("No flagged friends found for user",
-				zap.Int64("userID", userID),
-				zap.Int("totalFriends", len(friendIDs)))
-
-			return nil
-		}
-
-		// Extract flagged friend IDs
-		flaggedFriendIDs := make([]int64, len(flaggedFriends))
-		for i, user := range flaggedFriends {
-			flaggedFriendIDs[i] = user.ID
-		}
-
-		// Ask for confirmation
-		deps.Logger.Info("Found flagged friends to delete",
-			zap.Int64("userID", userID),
-			zap.Int("totalFriends", len(friendIDs)),
-			zap.Int("flaggedFriends", len(flaggedFriends)))
-
-		log.Printf("Are you sure you want to delete these %d flagged friends of user %d in batches of %d? (y/N)",
-			len(flaggedFriends), userID, batchSize)
-
-		var response string
-
-		_, _ = fmt.Scanln(&response)
-
-		if response != "y" && response != "Y" {
-			deps.Logger.Info("Operation cancelled")
-			return nil
-		}
-
-		// Process deletions in batches
-		var (
-			totalDeleted   int64
-			totalProcessed int
-		)
-
-		for i := 0; i < len(flaggedFriendIDs); i += batchSize {
-			end := min(i+batchSize, len(flaggedFriendIDs))
-			batchIDs := flaggedFriendIDs[i:end]
-			batchCount := len(batchIDs)
-
-			deps.Logger.Info("Processing deletion batch",
-				zap.Int("batch", i/batchSize+1),
-				zap.Int("size", batchCount),
-				zap.Int("processed", totalProcessed),
-				zap.Int("remaining", len(flaggedFriendIDs)-totalProcessed))
-
-			// Delete from PostgreSQL database
-			deleted, err := app.DB.Service().User().DeleteUsers(ctx, batchIDs)
+			inappropriateCount, err := processUserFriends(ctx, deps, userID, statuses, batchSize)
 			if err != nil {
-				return fmt.Errorf("failed to delete users from database in batch %d: %w", i/batchSize+1, err)
+				deps.Logger.Error("Failed to process user",
+					zap.Int64("userID", userID),
+					zap.Error(err))
+
+				log.Printf("Error processing user %d: %v", userID, err)
+
+				continue
 			}
 
-			totalDeleted += deleted
-			totalProcessed += batchCount
-
-			// Remove from Cloudflare D1 in batch
-			if err := app.CFClient.UserFlags.RemoveBatch(ctx, batchIDs); err != nil {
-				app.Logger.Warn("Failed to remove users from Cloudflare D1",
-					zap.Error(err),
-					zap.Int64s("batchIDs", batchIDs))
-			}
-
-			deps.Logger.Info("Batch processed successfully",
-				zap.Int("batch", i/batchSize+1),
-				zap.Int("processed", batchCount),
-				zap.Int64("deleted_rows", deleted))
-
-			// Add a small delay between batches to reduce system load
-			if end < len(flaggedFriendIDs) {
-				time.Sleep(100 * time.Millisecond)
-			}
+			totalInappropriateFriends += inappropriateCount
 		}
 
-		deps.Logger.Info("Successfully deleted all flagged friends",
-			zap.Int64("userID", userID),
-			zap.Int("total_flagged_friends", len(flaggedFriends)),
-			zap.Int64("total_deleted_rows", totalDeleted))
+		// Summary
+		if len(userIDs) > 1 {
+			fmt.Printf("\n=== Summary ===\n")
+			fmt.Printf("Processed %d users\n", len(userIDs))
+			fmt.Printf("Total inappropriate friends removed: %d\n", totalInappropriateFriends)
+		}
+
+		deps.Logger.Info("Friend cleanup completed",
+			zap.Int("totalUsers", len(userIDs)),
+			zap.Int("totalInappropriateFriends", totalInappropriateFriends))
 
 		return nil
 	}
 }
 
-// getUsersByStatus gets users by their IDs filtered by status.
-func getUsersByStatus(ctx context.Context, db database.Client, userIDs []int64, status enum.UserType) ([]*types.User, error) {
-	if len(userIDs) == 0 {
-		return []*types.User{}, nil
-	}
+// processUserFriends processes a single user's friends for cleanup.
+func processUserFriends(
+	ctx context.Context, deps *CLIDependencies,
+	userID int64, statuses []enum.UserType, batchSize int,
+) (int, error) {
+	// Create friend fetcher
+	friendFetcher := fetcher.NewFriendFetcher(deps.DB, deps.RoAPI, deps.Logger)
 
-	// Get users by IDs with basic fields
-	userMap, err := db.Model().User().GetUsersByIDs(ctx, userIDs, types.UserFieldBasic)
+	// Fetch friends for the user
+	deps.Logger.Info("Fetching friends for user", zap.Int64("userID", userID))
+
+	friendIDs, err := friendFetcher.GetFriendIDs(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get users by IDs: %w", err)
+		return 0, fmt.Errorf("failed to fetch friend IDs: %w", err)
 	}
 
-	// Filter by status and convert to simple User slice
-	var result []*types.User
-	for _, reviewUser := range userMap {
-		if reviewUser.User != nil && reviewUser.Status == status {
-			result = append(result, reviewUser.User)
-		}
+	if len(friendIDs) == 0 {
+		deps.Logger.Info("No friends found for user", zap.Int64("userID", userID))
+		log.Printf("User %d has no friends.", userID)
+
+		return 0, nil
 	}
 
-	return result, nil
+	deps.Logger.Info("Fetched friend IDs",
+		zap.Int64("userID", userID),
+		zap.Int("friendCount", len(friendIDs)))
+
+	// Find which friends match the status filter
+	inappropriateFriends, err := getUsersByStatuses(ctx, deps.DB, friendIDs, statuses)
+	if err != nil {
+		return 0, fmt.Errorf("failed to check friend status: %w", err)
+	}
+
+	if len(inappropriateFriends) == 0 {
+		deps.Logger.Info("No inappropriate friends found for user",
+			zap.Int64("userID", userID),
+			zap.Int("totalFriends", len(friendIDs)))
+
+		log.Printf("User %d: No inappropriate friends found (out of %d total friends).",
+			userID, len(friendIDs))
+
+		return 0, nil
+	}
+
+	// Extract inappropriate friend IDs
+	inappropriateFriendIDs := make([]int64, len(inappropriateFriends))
+	for i, user := range inappropriateFriends {
+		inappropriateFriendIDs[i] = user.ID
+	}
+
+	// Log findings
+	deps.Logger.Info("Found inappropriate friends to delete",
+		zap.Int64("userID", userID),
+		zap.Int("totalFriends", len(friendIDs)),
+		zap.Int("inappropriateFriends", len(inappropriateFriends)))
+
+	log.Printf("User %d: Found %d inappropriate friends (out of %d total friends)",
+		userID, len(inappropriateFriends), len(friendIDs))
+
+	// Process deletions in batches
+	totalDeleted, err := processDeletions(ctx, deps, inappropriateFriendIDs, batchSize)
+	if err != nil {
+		return 0, fmt.Errorf("failed to process deletions: %w", err)
+	}
+
+	deps.Logger.Info("Successfully deleted inappropriate friends",
+		zap.Int64("userID", userID),
+		zap.Int("inappropriate_friends", len(inappropriateFriends)),
+		zap.Int64("deleted_rows", totalDeleted))
+
+	log.Printf("User %d: Successfully deleted %d inappropriate friends",
+		userID, len(inappropriateFriends))
+
+	return len(inappropriateFriends), nil
+}
+
+// getUserIDsFromEditor opens a text editor for the user to input multiple user IDs.
+func getUserIDsFromEditor(ctx context.Context, purpose string) ([]int64, error) {
+	instructions := `# Rotector Friend Cleanup
+#
+# Instructions:
+# - Add one Roblox user ID per line
+# - Lines starting with # are comments and will be ignored
+# - Empty lines will be ignored
+#
+# Example:
+# 1234567890
+# 9876543210
+#
+# Add user IDs below (whose friends should be cleaned):
+
+`
+
+	// Create temporary file with instructions
+	tempFile, err := createTempFile("rotector_"+strings.ReplaceAll(purpose, " ", "_"), instructions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	defer os.Remove(tempFile)
+
+	fmt.Printf("Created temporary file: %s\n", tempFile)
+	fmt.Printf("Please add user IDs to the file (one per line).\n")
+	fmt.Println("Press Enter when you're done editing the file...")
+
+	// Try to open the file in the default editor
+	if err := openFileInEditor(ctx, tempFile); err != nil {
+		fmt.Printf("Warning: Could not open file in editor: %v\n", err)
+		fmt.Println("Please manually edit the file and press Enter when done.")
+	}
+
+	// Wait for user input
+	reader := bufio.NewReader(os.Stdin)
+
+	_, _ = reader.ReadString('\n')
+
+	// Read and process the file
+	userIDs, err := readIDsFromFile(tempFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read user IDs: %w", err)
+	}
+
+	return userIDs, nil
 }

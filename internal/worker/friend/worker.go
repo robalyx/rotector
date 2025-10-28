@@ -48,7 +48,7 @@ type Worker struct {
 func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instanceID string) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	userChecker := checker.NewUserChecker(app, userFetcher, logger)
-	friendFetcher := fetcher.NewFriendFetcher(app, logger)
+	friendFetcher := fetcher.NewFriendFetcher(app.DB, app.RoAPI, logger)
 	reporter := core.NewStatusReporter(app.StatusClient, "friend", instanceID, logger)
 	thresholdChecker := core.NewThresholdChecker(
 		app.DB,

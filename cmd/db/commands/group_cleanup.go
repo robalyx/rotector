@@ -8,25 +8,18 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
-	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
-	"github.com/robalyx/rotector/internal/database"
-	dbTypes "github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
-	"github.com/robalyx/rotector/internal/setup"
-	"github.com/robalyx/rotector/internal/setup/telemetry"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
 )
 
 var (
-	ErrGroupIDRequired = errors.New("GROUP_ID argument required")
-	ErrInvalidGroupID  = errors.New("invalid group ID: must be a number")
-	ErrInvalidInput    = errors.New("invalid input: must be a number")
-	ErrInvalidChoice   = errors.New("invalid choice")
+	ErrGroupIDRequired    = errors.New("GROUP_ID argument required in single mode")
+	ErrInvalidGroupID     = errors.New("invalid group ID: must be a number")
+	ErrGroupIDInMultiMode = errors.New("do not provide GROUP_ID argument in multi mode")
 )
 
 // GroupCleanupCommands returns all group cleanup-related commands.
@@ -34,21 +27,34 @@ func GroupCleanupCommands(deps *CLIDependencies) []*cli.Command {
 	return []*cli.Command{
 		{
 			Name:      "clean-group-members",
-			Usage:     "Remove inappropriate members from a group by role",
-			ArgsUsage: "GROUP_ID",
-			Description: `Clean group members for a specific group by role:
-  - GROUP_ID: The Roblox group ID to process (required)
+			Usage:     "Remove inappropriate members from group(s)",
+			ArgsUsage: "[GROUP_ID]",
+			Description: `Clean members from specific group(s):
+  - GROUP_ID: Single Roblox group ID (required in single mode)
+  - --multi: Enable multi-group mode with text editor
+  - --status: Filter by status - 'flagged', 'confirmed', or 'both' (default: 'both')
   - --batch-size: Number of users to process in each batch (default: 100)
 
-The command will:
-1. Display all group roles with member counts
-2. Let you select a specific role or all members (0)
-3. Remove flagged and confirmed users from the selection
+Single group mode:
+  db clean-group-members 12345                           # Clean both flagged and confirmed members
+  db clean-group-members 12345 --status flagged         # Clean only flagged members
+  db clean-group-members 12345 --status confirmed       # Clean only confirmed members
 
-Examples:
-  db clean-group-members 12345                    # Interactive role selection for group 12345
-  db clean-group-members 12345 --batch-size 50   # Clean with smaller batch size`,
+Multi-group mode (opens text editor):
+  db clean-group-members --multi                         # Clean members from multiple groups
+  db clean-group-members --multi --status flagged       # Clean only flagged members from multiple groups`,
 			Flags: []cli.Flag{
+				&cli.BoolFlag{
+					Name:    "multi",
+					Usage:   "Enable multi-group mode with text editor",
+					Aliases: []string{"m"},
+				},
+				&cli.StringFlag{
+					Name:    "status",
+					Usage:   "Filter by status: 'flagged', 'confirmed', or 'both'",
+					Value:   "both",
+					Aliases: []string{"s"},
+				},
 				&cli.IntFlag{
 					Name:    "batch-size",
 					Usage:   "Number of users to process in each batch",
@@ -64,217 +70,237 @@ Examples:
 // handleCleanGroupMembers handles the 'clean-group-members' command.
 func handleCleanGroupMembers(deps *CLIDependencies) cli.ActionFunc {
 	return func(ctx context.Context, c *cli.Command) error {
-		if c.Args().Len() != 1 {
-			return ErrGroupIDRequired
-		}
-
-		// Parse group ID
-		groupIDStr := c.Args().First()
-
-		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
-		if err != nil {
-			return fmt.Errorf("%w: %q", ErrInvalidGroupID, groupIDStr)
-		}
-
-		// Get batch size from flag
+		multiMode := c.Bool("multi")
+		statusFilter := c.String("status")
 		batchSize := max(c.Int("batch-size"), 10)
 
+		// Parse status filter
+		statuses, err := parseStatusFilter(statusFilter)
+		if err != nil {
+			return err
+		}
+
+		// Get group IDs based on mode
+		var groupIDs []int64
+
+		if multiMode {
+			// Multi-group mode with text editor
+			if c.Args().Len() > 0 {
+				return ErrGroupIDInMultiMode
+			}
+
+			groupIDs, err = getGroupIDsFromEditor(ctx)
+			if err != nil {
+				return err
+			}
+
+			if len(groupIDs) == 0 {
+				fmt.Println("No valid group IDs found.")
+				return nil
+			}
+
+			fmt.Printf("Found %d group IDs to process.\n\n", len(groupIDs))
+		} else {
+			// Single group mode
+			if c.Args().Len() != 1 {
+				return ErrGroupIDRequired
+			}
+
+			groupIDStr := c.Args().First()
+
+			groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
+			if err != nil {
+				return fmt.Errorf("%w: %q", ErrInvalidGroupID, groupIDStr)
+			}
+
+			groupIDs = []int64{groupID}
+		}
+
 		deps.Logger.Info("Starting group member cleanup process",
-			zap.Int64("groupID", groupID),
+			zap.Int("groupCount", len(groupIDs)),
 			zap.Int("batchSize", batchSize))
 
-		// Initialize application
-		app, err := setup.InitializeApp(ctx, telemetry.ServiceExport, "logs/cli", "db", "group-cleanup")
-		if err != nil {
-			return fmt.Errorf("failed to initialize app: %w", err)
-		}
+		// Process each group
+		var totalInappropriateMembers int
 
-		// Fetch and display group roles
-		deps.Logger.Info("Fetching group roles", zap.Int64("groupID", groupID))
-
-		roles, err := fetchGroupRoles(ctx, app, groupID)
-		if err != nil {
-			return fmt.Errorf("failed to fetch group roles for group %d: %w", groupID, err)
-		}
-
-		if len(roles) == 0 {
-			deps.Logger.Info("No roles found for group", zap.Int64("groupID", groupID))
-			return nil
-		}
-
-		// Display roles and get user selection
-		selectedRoleID, roleName, err := selectRole(roles)
-		if err != nil {
-			return fmt.Errorf("role selection failed: %w", err)
-		}
-
-		// Fetch members based on selection
-		var memberIDs []int64
-
-		if selectedRoleID == 0 {
-			deps.Logger.Info("Fetching all group members", zap.Int64("groupID", groupID))
-
-			memberIDs, err = fetchGroupMembers(ctx, app, groupID)
-			if err != nil {
-				return fmt.Errorf("failed to fetch group members: %w", err)
+		for i, groupID := range groupIDs {
+			if len(groupIDs) > 1 {
+				fmt.Printf("\n[%d/%d] Processing group %d...\n", i+1, len(groupIDs), groupID)
 			}
-		} else {
-			deps.Logger.Info("Fetching role members",
-				zap.Int64("groupID", groupID),
-				zap.Int64("roleID", selectedRoleID),
-				zap.String("roleName", roleName))
 
-			memberIDs, err = fetchRoleMembers(ctx, app, groupID, selectedRoleID)
+			inappropriateCount, err := processGroupMembers(ctx, deps, groupID, statuses, batchSize)
 			if err != nil {
-				return fmt.Errorf("failed to fetch role members: %w", err)
+				deps.Logger.Error("Failed to process group",
+					zap.Int64("groupID", groupID),
+					zap.Error(err))
+
+				log.Printf("Error processing group %d: %v", groupID, err)
+
+				continue
 			}
+
+			totalInappropriateMembers += inappropriateCount
 		}
 
-		if len(memberIDs) == 0 {
-			log.Printf("No members found for selected role: %s", roleName)
-			return nil
+		// Summary
+		if len(groupIDs) > 1 {
+			fmt.Printf("\n=== Summary ===\n")
+			fmt.Printf("Processed %d groups\n", len(groupIDs))
+			fmt.Printf("Total inappropriate members removed: %d\n", totalInappropriateMembers)
 		}
 
-		deps.Logger.Info("Fetched member IDs",
-			zap.Int64("groupID", groupID),
-			zap.String("selectedRole", roleName),
-			zap.Int("memberCount", len(memberIDs)))
-
-		// Find which members are flagged or confirmed in our system
-		inappropriateMembers, err := getUsersByMultipleStatuses(ctx, app.DB, memberIDs,
-			[]enum.UserType{enum.UserTypeFlagged, enum.UserTypeConfirmed})
-		if err != nil {
-			return fmt.Errorf("failed to check member status: %w", err)
-		}
-
-		if len(inappropriateMembers) == 0 {
-			log.Printf("No inappropriate members found in role: %s (%d total members checked)",
-				roleName, len(memberIDs))
-
-			return nil
-		}
-
-		// Extract inappropriate member IDs
-		inappropriateMemberIDs := make([]int64, len(inappropriateMembers))
-		for i, user := range inappropriateMembers {
-			inappropriateMemberIDs[i] = user.ID
-		}
-
-		// Ask for confirmation
-		deps.Logger.Info("Found inappropriate members to delete",
-			zap.Int64("groupID", groupID),
-			zap.String("selectedRole", roleName),
-			zap.Int("totalMembers", len(memberIDs)),
-			zap.Int("inappropriateMembers", len(inappropriateMembers)))
-
-		log.Printf("Found %d inappropriate members in role '%s' (out of %d total members)",
-			len(inappropriateMembers), roleName, len(memberIDs))
-		log.Printf("Are you sure you want to delete these %d inappropriate members in batches of %d? (y/N)",
-			len(inappropriateMembers), batchSize)
-
-		// Get user confirmation
-		reader := bufio.NewReader(os.Stdin)
-
-		response, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
-		}
-
-		response = strings.TrimSpace(response)
-		if response != "y" && response != "Y" {
-			deps.Logger.Info("Operation cancelled")
-			return nil
-		}
-
-		// Process deletions in batches
-		totalDeleted, err := processDeletions(ctx, app, deps, inappropriateMemberIDs, batchSize)
-		if err != nil {
-			return fmt.Errorf("failed to process deletions: %w", err)
-		}
-
-		deps.Logger.Info("Successfully deleted all inappropriate members",
-			zap.Int64("groupID", groupID),
-			zap.String("selectedRole", roleName),
-			zap.Int("total_inappropriate_members", len(inappropriateMembers)),
-			zap.Int64("total_deleted_rows", totalDeleted))
-
-		log.Printf("Cleanup completed! Deleted %d inappropriate members from role '%s'",
-			len(inappropriateMembers), roleName)
+		deps.Logger.Info("Group cleanup completed",
+			zap.Int("totalGroups", len(groupIDs)),
+			zap.Int("totalInappropriateMembers", totalInappropriateMembers))
 
 		return nil
 	}
 }
 
-// fetchGroupRoles fetches all roles in a group.
-func fetchGroupRoles(ctx context.Context, app *setup.App, groupID int64) ([]apiTypes.GroupRole, error) {
-	rolesResponse, err := app.RoAPI.Groups().GetGroupRoles(ctx, groupID)
+// processGroupMembers processes a single group's members for cleanup.
+func processGroupMembers(
+	ctx context.Context, deps *CLIDependencies,
+	groupID int64, statuses []enum.UserType, batchSize int,
+) (int, error) {
+	// Fetch all group members
+	deps.Logger.Info("Fetching all group members", zap.Int64("groupID", groupID))
+
+	memberIDs, err := fetchGroupMembers(ctx, deps, groupID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch group roles: %w", err)
+		return 0, fmt.Errorf("failed to fetch group members: %w", err)
 	}
 
-	return rolesResponse.Roles, nil
+	if len(memberIDs) == 0 {
+		deps.Logger.Info("No members found for group", zap.Int64("groupID", groupID))
+		log.Printf("Group %d has no members.", groupID)
+
+		return 0, nil
+	}
+
+	deps.Logger.Info("Fetched member IDs",
+		zap.Int64("groupID", groupID),
+		zap.Int("memberCount", len(memberIDs)))
+
+	// Find which members match the status filter
+	inappropriateMembers, err := getUsersByStatuses(ctx, deps.DB, memberIDs, statuses)
+	if err != nil {
+		return 0, fmt.Errorf("failed to check member status: %w", err)
+	}
+
+	if len(inappropriateMembers) == 0 {
+		deps.Logger.Info("No inappropriate members found in group",
+			zap.Int64("groupID", groupID),
+			zap.Int("totalMembers", len(memberIDs)))
+
+		log.Printf("Group %d: No inappropriate members found (out of %d total members).",
+			groupID, len(memberIDs))
+
+		return 0, nil
+	}
+
+	// Extract inappropriate member IDs
+	inappropriateMemberIDs := make([]int64, len(inappropriateMembers))
+	for i, user := range inappropriateMembers {
+		inappropriateMemberIDs[i] = user.ID
+	}
+
+	// Log findings
+	deps.Logger.Info("Found inappropriate members to delete",
+		zap.Int64("groupID", groupID),
+		zap.Int("totalMembers", len(memberIDs)),
+		zap.Int("inappropriateMembers", len(inappropriateMembers)))
+
+	log.Printf("Group %d: Found %d inappropriate members (out of %d total members)",
+		groupID, len(inappropriateMembers), len(memberIDs))
+
+	// Process deletions in batches
+	totalDeleted, err := processDeletions(ctx, deps, inappropriateMemberIDs, batchSize)
+	if err != nil {
+		return 0, fmt.Errorf("failed to process deletions: %w", err)
+	}
+
+	deps.Logger.Info("Successfully deleted inappropriate members",
+		zap.Int64("groupID", groupID),
+		zap.Int("inappropriate_members", len(inappropriateMembers)),
+		zap.Int64("deleted_rows", totalDeleted))
+
+	log.Printf("Group %d: Successfully deleted %d inappropriate members",
+		groupID, len(inappropriateMembers))
+
+	return len(inappropriateMembers), nil
 }
 
-// selectRole displays roles and prompts user to select one.
-func selectRole(roles []apiTypes.GroupRole) (int64, string, error) {
-	fmt.Println("\n=== Group Roles ===")
-	fmt.Printf("0. All group members\n")
+// getGroupIDsFromEditor opens a text editor for the user to input multiple group IDs.
+func getGroupIDsFromEditor(ctx context.Context) ([]int64, error) {
+	instructions := `# Rotector Group Member Cleanup
+#
+# Instructions:
+# - Add one Roblox group ID per line
+# - Lines starting with # are comments and will be ignored
+# - Empty lines will be ignored
+#
+# Example:
+# 1234567890
+# 9876543210
+#
+# Add group IDs below:
 
-	for i, role := range roles {
-		fmt.Printf("%d. %s (Rank: %d, Members: %d)\n",
-			i+1, role.Name, role.Rank, role.MemberCount)
+`
+
+	// Create temporary file with instructions
+	tempFile, err := createTempFile("rotector_group_cleanup", instructions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	defer os.Remove(tempFile)
+
+	fmt.Printf("Created temporary file: %s\n", tempFile)
+	fmt.Printf("Please add group IDs to the file (one per line).\n")
+	fmt.Println("Press Enter when you're done editing the file...")
+
+	// Try to open the file in the default editor
+	if err := openFileInEditor(ctx, tempFile); err != nil {
+		fmt.Printf("Warning: Could not open file in editor: %v\n", err)
+		fmt.Println("Please manually edit the file and press Enter when done.")
 	}
 
-	fmt.Print("\nEnter the number of the role you want to clean (0 for all members): ")
-
+	// Wait for user input
 	reader := bufio.NewReader(os.Stdin)
 
-	input, err := reader.ReadString('\n')
+	_, _ = reader.ReadString('\n')
+
+	// Read and process the file
+	groupIDs, err := readIDsFromFile(tempFile)
 	if err != nil {
-		return 0, "", fmt.Errorf("failed to read input: %w", err)
+		return nil, fmt.Errorf("failed to read group IDs: %w", err)
 	}
 
-	choice, err := strconv.Atoi(strings.TrimSpace(input))
-	if err != nil {
-		return 0, "", ErrInvalidInput
-	}
-
-	if choice == 0 {
-		return 0, "All group members", nil
-	}
-
-	if choice < 1 || choice > len(roles) {
-		return 0, "", fmt.Errorf("%w: must be between 0 and %d", ErrInvalidChoice, len(roles))
-	}
-
-	selectedRole := roles[choice-1]
-
-	return selectedRole.ID, selectedRole.Name, nil
+	return groupIDs, nil
 }
 
 // processDeletions handles batch deletion of inappropriate users.
 func processDeletions(
-	ctx context.Context, app *setup.App, deps *CLIDependencies,
-	inappropriateMemberIDs []int64, batchSize int,
+	ctx context.Context, deps *CLIDependencies,
+	inappropriateUserIDs []int64, batchSize int,
 ) (int64, error) {
 	var (
 		totalDeleted   int64
 		totalProcessed int
 	)
 
-	for i := 0; i < len(inappropriateMemberIDs); i += batchSize {
-		end := min(i+batchSize, len(inappropriateMemberIDs))
-		batchIDs := inappropriateMemberIDs[i:end]
+	for i := 0; i < len(inappropriateUserIDs); i += batchSize {
+		end := min(i+batchSize, len(inappropriateUserIDs))
+		batchIDs := inappropriateUserIDs[i:end]
 		batchCount := len(batchIDs)
 
 		deps.Logger.Info("Processing deletion batch",
 			zap.Int("batch", i/batchSize+1),
 			zap.Int("size", batchCount),
 			zap.Int("processed", totalProcessed),
-			zap.Int("remaining", len(inappropriateMemberIDs)-totalProcessed))
+			zap.Int("remaining", len(inappropriateUserIDs)-totalProcessed))
 
 		// Delete from PostgreSQL database
-		deleted, err := app.DB.Service().User().DeleteUsers(ctx, batchIDs)
+		deleted, err := deps.DB.Service().User().DeleteUsers(ctx, batchIDs)
 		if err != nil {
 			return 0, fmt.Errorf("failed to delete users from database in batch %d: %w", i/batchSize+1, err)
 		}
@@ -283,8 +309,8 @@ func processDeletions(
 		totalProcessed += batchCount
 
 		// Remove from Cloudflare D1 in batch
-		if err := app.CFClient.UserFlags.RemoveBatch(ctx, batchIDs); err != nil {
-			app.Logger.Warn("Failed to remove users from Cloudflare D1",
+		if err := deps.CFClient.UserFlags.RemoveBatch(ctx, batchIDs); err != nil {
+			deps.Logger.Warn("Failed to remove users from Cloudflare D1",
 				zap.Error(err),
 				zap.Int64s("batchIDs", batchIDs))
 		}
@@ -295,7 +321,7 @@ func processDeletions(
 			zap.Int64("deleted_rows", deleted))
 
 		// Add a small delay between batches to reduce system load
-		if end < len(inappropriateMemberIDs) {
+		if end < len(inappropriateUserIDs) {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
@@ -303,43 +329,8 @@ func processDeletions(
 	return totalDeleted, nil
 }
 
-// fetchRoleMembers fetches all member IDs from a specific role using pagination.
-func fetchRoleMembers(ctx context.Context, app *setup.App, groupID, roleID int64) ([]int64, error) {
-	var allMemberIDs []int64
-
-	cursor := ""
-
-	for {
-		// Build request with pagination
-		builder := groups.NewRoleUsersBuilder(groupID, roleID).WithLimit(100)
-		if cursor != "" {
-			builder = builder.WithCursor(cursor)
-		}
-
-		// Fetch role members
-		roleUsers, err := app.RoAPI.Groups().GetRoleUsers(ctx, builder.Build())
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch role users: %w", err)
-		}
-
-		// Extract user IDs from the response
-		for _, member := range roleUsers.Data {
-			allMemberIDs = append(allMemberIDs, member.UserID)
-		}
-
-		// Check if there are more pages
-		if roleUsers.NextPageCursor == nil || *roleUsers.NextPageCursor == "" {
-			break
-		}
-
-		cursor = *roleUsers.NextPageCursor
-	}
-
-	return allMemberIDs, nil
-}
-
 // fetchGroupMembers fetches all member IDs from a group using pagination.
-func fetchGroupMembers(ctx context.Context, app *setup.App, groupID int64) ([]int64, error) {
+func fetchGroupMembers(ctx context.Context, deps *CLIDependencies, groupID int64) ([]int64, error) {
 	var allMemberIDs []int64
 
 	cursor := ""
@@ -352,7 +343,7 @@ func fetchGroupMembers(ctx context.Context, app *setup.App, groupID int64) ([]in
 		}
 
 		// Fetch group members
-		groupUsers, err := app.RoAPI.Groups().GetGroupUsers(ctx, builder.Build())
+		groupUsers, err := deps.RoAPI.Groups().GetGroupUsers(ctx, builder.Build())
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch group users: %w", err)
 		}
@@ -371,36 +362,4 @@ func fetchGroupMembers(ctx context.Context, app *setup.App, groupID int64) ([]in
 	}
 
 	return allMemberIDs, nil
-}
-
-// getUsersByMultipleStatuses gets users by their IDs filtered by multiple statuses.
-func getUsersByMultipleStatuses(
-	ctx context.Context, db database.Client, userIDs []int64, statuses []enum.UserType,
-) ([]*dbTypes.User, error) {
-	if len(userIDs) == 0 {
-		return []*dbTypes.User{}, nil
-	}
-
-	// Get users by IDs with basic fields
-	userMap, err := db.Model().User().GetUsersByIDs(ctx, userIDs, dbTypes.UserFieldBasic)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get users by IDs: %w", err)
-	}
-
-	// Create status map for efficient lookup
-	statusSet := make(map[enum.UserType]bool)
-	for _, status := range statuses {
-		statusSet[status] = true
-	}
-
-	// Filter by status and convert to simple User slice
-	var result []*dbTypes.User
-
-	for _, reviewUser := range userMap {
-		if reviewUser.User != nil && statusSet[reviewUser.Status] {
-			result = append(result, reviewUser.User)
-		}
-	}
-
-	return result, nil
 }

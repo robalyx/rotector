@@ -128,7 +128,7 @@ func (m *ConfirmMenu) handleDeleteGroup(ctx *interaction.Context, idStr string, 
 	}
 
 	// Delete group
-	found, err := m.layout.db.Model().Group().DeleteGroup(ctx.Context(), id)
+	affected, err := m.layout.db.Service().Group().DeleteGroups(ctx.Context(), []int64{id})
 	if err != nil {
 		m.layout.logger.Error("Failed to delete group",
 			zap.Error(err),
@@ -139,7 +139,7 @@ func (m *ConfirmMenu) handleDeleteGroup(ctx *interaction.Context, idStr string, 
 	}
 
 	// Check if the ID was found in the database
-	if !found {
+	if affected == 0 {
 		ctx.NavigateBack("Group ID not found in the database.")
 		return
 	}

@@ -50,7 +50,7 @@ Examples:
 			Usage:     "Delete flagged users that have been updated after a specific time",
 			ArgsUsage: "TIME",
 			Description: `Delete flagged users that have been updated after the specified time.
-			
+
 TIME can be in various formats:
   - "2006-01-02" (date only, assumes 00:00:00 UTC)
   - "2006-01-02 15:04:05" (datetime, assumes UTC)
@@ -69,10 +69,10 @@ Examples:
   db delete-after-time "2024-01-01" -r OUTFIT,FRIEND       # Only users with both OUTFIT and FRIEND reasons
   db delete-after-time "2024-01-01" -r PROFILE,GROUP,CHAT  # Only users with exactly these three reasons
 
-Note: When using timezone names with spaces (like "Asia/Singapore"), you may need 
+Note: When using timezone names with spaces (like "Asia/Singapore"), you may need
 to escape quotes depending on your shell:
   just run-db delete-after-time '"2024-01-01 12:00:00 Asia/Singapore"'
-  
+
 For reliable cross-platform usage, prefer RFC3339 format with timezone offsets.`,
 			Flags: []cli.Flag{
 				&cli.IntFlag{
@@ -174,6 +174,13 @@ func handleClearReason(deps *CLIDependencies) cli.ActionFunc {
 
 			totalAffected += affected
 			totalProcessed += batchCount
+
+			// Remove from Cloudflare D1 in batch
+			if err := deps.CFClient.UserFlags.RemoveBatch(ctx, batchIDs); err != nil {
+				deps.Logger.Warn("Failed to remove users from Cloudflare D1",
+					zap.Error(err),
+					zap.Int64s("batchIDs", batchIDs))
+			}
 
 			deps.Logger.Info("Batch processed successfully",
 				zap.Int("batch", i/batchSize+1),
@@ -328,6 +335,13 @@ func handleDeleteAfterTime(deps *CLIDependencies) cli.ActionFunc {
 
 			totalAffected += affected
 			totalProcessed += batchCount
+
+			// Remove from Cloudflare D1 in batch
+			if err := deps.CFClient.UserFlags.RemoveBatch(ctx, batchIDs); err != nil {
+				deps.Logger.Warn("Failed to remove users from Cloudflare D1",
+					zap.Error(err),
+					zap.Int64s("batchIDs", batchIDs))
+			}
 
 			deps.Logger.Info("Batch processed successfully",
 				zap.Int("batch", i/batchSize+1),

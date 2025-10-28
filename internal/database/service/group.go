@@ -19,6 +19,7 @@ type GroupService struct {
 	db       *bun.DB
 	model    *models.GroupModel
 	activity *models.ActivityModel
+	tracking *models.TrackingModel
 	logger   *zap.Logger
 }
 
@@ -27,12 +28,14 @@ func NewGroup(
 	db *bun.DB,
 	model *models.GroupModel,
 	activity *models.ActivityModel,
+	tracking *models.TrackingModel,
 	logger *zap.Logger,
 ) *GroupService {
 	return &GroupService{
 		db:       db,
 		model:    model,
 		activity: activity,
+		tracking: tracking,
 		logger:   logger.Named("group_service"),
 	}
 }
@@ -193,4 +196,39 @@ func (s *GroupService) SaveGroups(ctx context.Context, groups map[int64]*types.R
 		zap.Int("totalGroups", len(groups)))
 
 	return nil
+}
+
+// DeleteGroups removes groups and all associated data including tracking.
+func (s *GroupService) DeleteGroups(ctx context.Context, groupIDs []int64) (int64, error) {
+	if len(groupIDs) == 0 {
+		return 0, nil
+	}
+
+	var totalAffected int64
+
+	err := dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
+		// Remove groups from tracking tables
+		if err := s.tracking.RemoveGroupsFromTracking(ctx, groupIDs); err != nil {
+			return err
+		}
+
+		// Delete groups and their associated data
+		affected, err := s.model.DeleteGroupsWithTx(ctx, tx, groupIDs)
+		if err != nil {
+			return err
+		}
+
+		totalAffected = affected
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	s.logger.Debug("Successfully deleted groups",
+		zap.Int("groupCount", len(groupIDs)),
+		zap.Int64("affectedRows", totalAffected))
+
+	return totalAffected, nil
 }

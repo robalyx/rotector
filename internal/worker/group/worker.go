@@ -24,7 +24,7 @@ const (
 	MaxGroupsPerBatch           = 10
 	ExistingUserThreshold       = 0.90
 	VirtualPageSize             = 10
-	VirtualPageNoFlagsThreshold = 0.50
+	VirtualPageNoFlagsThreshold = 0.75
 )
 
 // Worker processes group member lists by checking each member's
