@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/setup/config"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 // ServiceManager manages verification service lifecycle and provides access to services.
@@ -103,86 +105,101 @@ func (m *ServiceManager) GetServices() []Service {
 func (m *ServiceManager) FetchAllVerificationProfiles(
 	ctx context.Context, discordUserID uint64,
 ) []*types.DiscordRobloxConnection {
-	connections := make([]*types.DiscordRobloxConnection, 0, len(m.services))
+	var (
+		connections []*types.DiscordRobloxConnection
+		mu          sync.Mutex
+	)
 
-	// Attempt each verification service
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Attempt each verification service concurrently
 	for i, service := range m.services {
-		serviceName := service.GetServiceName()
+		g.Go(func() error {
+			serviceName := service.GetServiceName()
 
-		m.logger.Debug("Attempting verification service",
-			zap.Int("service_index", i),
-			zap.String("service_name", serviceName),
-			zap.Uint64("discord_user_id", discordUserID))
+			m.logger.Debug("Attempting verification service",
+				zap.Int("service_index", i),
+				zap.String("service_name", serviceName),
+				zap.Uint64("discord_user_id", discordUserID))
 
-		// Execute the verification command
-		response, err := service.ExecuteCommand(ctx, discordUserID)
-		if err != nil {
-			if errors.Is(err, ErrUserNotVerified) {
-				m.logger.Debug("User not verified with service",
-					zap.String("service_name", serviceName),
-					zap.Uint64("discord_user_id", discordUserID))
-			} else {
-				m.logger.Error("Failed to execute verification command",
-					zap.String("service_name", serviceName),
-					zap.Uint64("discord_user_id", discordUserID),
-					zap.Error(err))
-			}
-
-			continue
-		}
-
-		// Parse the response to extract Roblox information
-		robloxUserID, robloxUsername, err := service.ParseResponse(response)
-		if err != nil {
-			// NOTE: usually we would add exponential retry logic but
-			// to keep this simple, we will only retry once here
-			if errors.Is(err, ErrServiceTemporarilyUnavailable) {
-				m.logger.Warn("Service returned temporary error, retrying after delay",
-					zap.String("service_name", serviceName),
-					zap.Uint64("discord_user_id", discordUserID))
-
-				time.Sleep(10 * time.Second)
-
-				response, err = service.ExecuteCommand(ctx, discordUserID)
-				if err == nil {
-					robloxUserID, robloxUsername, err = service.ParseResponse(response)
-				}
-			}
-
+			// Execute the verification command
+			response, err := service.ExecuteCommand(ctx, discordUserID)
 			if err != nil {
 				if errors.Is(err, ErrUserNotVerified) {
-					m.logger.Debug("User not verified with service (parse)",
+					m.logger.Debug("User not verified with service",
 						zap.String("service_name", serviceName),
 						zap.Uint64("discord_user_id", discordUserID))
 				} else {
-					m.logger.Warn("Failed to parse verification response",
+					m.logger.Error("Failed to execute verification command",
 						zap.String("service_name", serviceName),
 						zap.Uint64("discord_user_id", discordUserID),
 						zap.Error(err))
 				}
 
-				continue
+				return nil
 			}
-		}
 
-		// Success! Add the connection to our results
-		m.logger.Info("Successfully verified user with service",
-			zap.String("service_name", serviceName),
-			zap.Uint64("discord_user_id", discordUserID),
-			zap.Int64("roblox_user_id", robloxUserID),
-			zap.String("roblox_username", robloxUsername))
+			// Parse the response to extract Roblox information
+			robloxUserID, robloxUsername, err := service.ParseResponse(response)
+			if err != nil {
+				// NOTE: usually we would add exponential retry logic but
+				// to keep this simple, we will only retry once here
+				if errors.Is(err, ErrServiceTemporarilyUnavailable) {
+					m.logger.Warn("Service returned temporary error, retrying after delay",
+						zap.String("service_name", serviceName),
+						zap.Uint64("discord_user_id", discordUserID))
 
-		now := time.Now()
+					time.Sleep(10 * time.Second)
 
-		connections = append(connections, &types.DiscordRobloxConnection{
-			DiscordUserID:  discordUserID,
-			RobloxUserID:   robloxUserID,
-			RobloxUsername: robloxUsername,
-			Verified:       true,
-			DetectedAt:     now,
-			UpdatedAt:      now,
+					response, err = service.ExecuteCommand(ctx, discordUserID)
+					if err == nil {
+						robloxUserID, robloxUsername, err = service.ParseResponse(response)
+					}
+				}
+
+				if err != nil {
+					if errors.Is(err, ErrUserNotVerified) {
+						m.logger.Debug("User not verified with service (parse)",
+							zap.String("service_name", serviceName),
+							zap.Uint64("discord_user_id", discordUserID))
+					} else {
+						m.logger.Warn("Failed to parse verification response",
+							zap.String("service_name", serviceName),
+							zap.Uint64("discord_user_id", discordUserID),
+							zap.Error(err))
+					}
+
+					return nil
+				}
+			}
+
+			// Success! Add the connection to our results
+			m.logger.Info("Successfully verified user with service",
+				zap.String("service_name", serviceName),
+				zap.Uint64("discord_user_id", discordUserID),
+				zap.Int64("roblox_user_id", robloxUserID),
+				zap.String("roblox_username", robloxUsername))
+
+			now := time.Now()
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			connections = append(connections, &types.DiscordRobloxConnection{
+				DiscordUserID:  discordUserID,
+				RobloxUserID:   robloxUserID,
+				RobloxUsername: robloxUsername,
+				Verified:       true,
+				DetectedAt:     now,
+				UpdatedAt:      now,
+			})
+
+			return nil
 		})
 	}
+
+	// Wait for all services to complete
+	_ = g.Wait()
 
 	return connections
 }
