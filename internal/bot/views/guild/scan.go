@@ -80,11 +80,7 @@ func (b *ScanBuilder) buildWarningDisplay() discord.LayoutComponent {
 
 		content.WriteString("### Flagging Conditions\n")
 		content.WriteString("- Sending messages in inappropriate servers (active participation)\n")
-		content.WriteString("- Being present in inappropriate servers for over 12 hours (beyond grace period)\n")
-
-		content.WriteString("### Important Notes\n")
-		content.WriteString("- Users are automatically removed if they've been clean for 7 days\n")
-		content.WriteString("- The grace period helps exclude users who join and leave quickly\n\n")
+		content.WriteString("- Being present in inappropriate servers for over 24 hours (beyond grace period)\n")
 
 		content.WriteString("Review the list carefully before confirming bans!\n")
 

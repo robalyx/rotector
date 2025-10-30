@@ -27,8 +27,9 @@ func NewSync(db *bun.DB, logger *zap.Logger) *SyncModel {
 
 // UpsertServerMember creates or updates a single server member record.
 func (m *SyncModel) UpsertServerMember(ctx context.Context, member *types.DiscordServerMember) error {
-	return dbretry.NoResult(ctx, func(ctx context.Context) error {
-		_, err := m.db.NewInsert().
+	return dbretry.Transaction(ctx, m.db, func(ctx context.Context, tx bun.Tx) error {
+		// Upsert server member
+		_, err := tx.NewInsert().
 			Model(member).
 			On("CONFLICT (server_id, user_id) DO UPDATE").
 			Set("updated_at = EXCLUDED.updated_at").
@@ -36,6 +37,26 @@ func (m *SyncModel) UpsertServerMember(ctx context.Context, member *types.Discor
 		if err != nil {
 			return fmt.Errorf("failed to upsert member: %w", err)
 		}
+
+		// Create full scan record for this user if it doesn't exist
+		// NOTE: We don't update the scan time on conflict since this method is used
+		// for membership tracking (e.g., message events), not full scans
+		scan := &types.DiscordUserFullScan{
+			UserID:   member.UserID,
+			LastScan: time.Time{}, // Zero value indicates never scanned
+		}
+
+		_, err = tx.NewInsert().
+			Model(scan).
+			On("CONFLICT (user_id) DO NOTHING").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to insert user full scan: %w", err)
+		}
+
+		m.logger.Debug("Upserted server member",
+			zap.Uint64("serverID", member.ServerID),
+			zap.Uint64("userID", member.UserID))
 
 		return nil
 	})
@@ -71,9 +92,14 @@ func (m *SyncModel) UpsertServerMembers(
 		// Convert unique users to full scan records
 		scans := make([]*types.DiscordUserFullScan, 0, len(uniqueUsers))
 		for userID := range uniqueUsers {
+			lastScan := time.Time{} // Zero value for newly discovered users
+			if updateScanTime {
+				lastScan = now // Current time if we just performed a full scan
+			}
+
 			scans = append(scans, &types.DiscordUserFullScan{
 				UserID:   userID,
-				LastScan: now.Add(-time.Hour * 24),
+				LastScan: lastScan,
 			})
 		}
 
@@ -97,6 +123,24 @@ func (m *SyncModel) UpsertServerMembers(
 
 		m.logger.Debug("Upserted batch of server members",
 			zap.Int("member_count", len(members)))
+
+		return nil
+	})
+}
+
+// UpdateUserScanTimestamp updates the last scan timestamp for a user.
+func (m *SyncModel) UpdateUserScanTimestamp(ctx context.Context, userID uint64) error {
+	now := time.Now()
+
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := m.db.NewUpdate().
+			Model((*types.DiscordUserFullScan)(nil)).
+			Set("last_scan = ?", now).
+			Where("user_id = ?", userID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update user scan timestamp: %w", err)
+		}
 
 		return nil
 	})
@@ -323,63 +367,6 @@ func (m *SyncModel) GetDiscordUserGuildCount(ctx context.Context, discordUserID 
 
 		return count, nil
 	})
-}
-
-// PurgeOldServerMembers removes Discord server member records older than the specified cutoff date.
-func (m *SyncModel) PurgeOldServerMembers(ctx context.Context, cutoffDate time.Time) (int, error) {
-	var affected int64
-
-	err := dbretry.Transaction(ctx, m.db, func(ctx context.Context, tx bun.Tx) error {
-		// Get users to be purged
-		var usersToPurge []uint64
-
-		err := tx.NewSelect().
-			Model((*types.DiscordServerMember)(nil)).
-			Column("user_id").
-			Where("updated_at < ?", cutoffDate).
-			Group("user_id").
-			Scan(ctx, &usersToPurge)
-		if err != nil {
-			return fmt.Errorf("failed to get users to purge: %w", err)
-		}
-
-		// Delete old server members
-		result, err := tx.NewDelete().
-			Model((*types.DiscordServerMember)(nil)).
-			Where("updated_at < ?", cutoffDate).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to purge old server members: %w", err)
-		}
-
-		// Delete corresponding full scan records
-		if len(usersToPurge) > 0 {
-			_, err = tx.NewDelete().
-				Model((*types.DiscordUserFullScan)(nil)).
-				Where("user_id IN (?)", bun.In(usersToPurge)).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to purge full scan records: %w", err)
-			}
-		}
-
-		affected, err = result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("failed to get affected rows: %w", err)
-		}
-
-		m.logger.Debug("Purged old server members and full scan records",
-			zap.Int64("rowsAffected", affected),
-			zap.Time("cutoffDate", cutoffDate),
-			zap.Int("usersRemoved", len(usersToPurge)))
-
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-
-	return int(affected), nil
 }
 
 // MarkUserDataRedacted marks a user's data as redacted.

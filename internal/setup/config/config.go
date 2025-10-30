@@ -51,8 +51,24 @@ type CommonConfig struct {
 
 // DiscordConfig contains Discord-related configuration.
 type DiscordConfig struct {
-	// Self-bot token for server scanning.
-	SyncToken string `koanf:"sync_token"`
+	// Self-bot tokens for server scanning.
+	SyncTokens []string `koanf:"sync_tokens"`
+	// Primary verification service configuration.
+	VerificationServiceA VerificationServiceConfig `koanf:"verification_service_a"`
+	// Secondary verification service configuration.
+	VerificationServiceB VerificationServiceConfig `koanf:"verification_service_b"`
+}
+
+// VerificationServiceConfig contains configuration for a verification service.
+type VerificationServiceConfig struct {
+	// Token for verification service bot.
+	Token string `koanf:"token"`
+	// Guild ID where verification lookups are performed.
+	GuildID uint64 `koanf:"guild_id"`
+	// Channel ID where verification lookups are performed.
+	ChannelID uint64 `koanf:"channel_id"`
+	// Command name to execute for verification lookups.
+	CommandName string `koanf:"command_name"`
 }
 
 // BotConfig contains Discord bot specific configuration.

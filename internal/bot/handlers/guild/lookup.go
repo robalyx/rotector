@@ -131,11 +131,20 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 
 	// Only perform full scan if user is not whitelisted
 	if !isWhitelisted {
-		username, err = m.layout.scanner.PerformFullScan(ctx.Context(), discordUserID)
-		if err != nil {
-			m.layout.logger.Error("Failed to perform full scan",
-				zap.Error(err),
-				zap.Uint64("discord_userID", discordUserID))
+		// Fetch verification connections
+		verificationConns := m.layout.verificationManager.FetchAllVerificationProfiles(ctx.Context(), discordUserID)
+
+		// Get scanner from pool for load distribution
+		scanner := m.layout.getNextScanner()
+		if scanner != nil {
+			username, err = scanner.PerformFullScan(ctx.Context(), discordUserID, true, verificationConns)
+			if err != nil {
+				m.layout.logger.Error("Failed to perform full scan",
+					zap.Error(err),
+					zap.Uint64("discord_userID", discordUserID))
+			}
+		} else {
+			m.layout.logger.Warn("No scanners available for user lookup")
 		}
 	}
 
