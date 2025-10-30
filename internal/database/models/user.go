@@ -288,26 +288,16 @@ func (r *UserModel) ClearUserWithTx(ctx context.Context, tx bun.Tx, user *types.
 	return nil
 }
 
-// UpdateUsersToPastOffender updates users to past offender status and deletes their reasons.
+// UpdateUsersToPastOffender updates users to past offender status while preserving their reasons and confidence.
 func (r *UserModel) UpdateUsersToPastOffender(ctx context.Context, tx bun.Tx, userIDs []int64) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
 
-	// Delete user reasons
-	_, err := tx.NewDelete().
-		Model((*types.UserReason)(nil)).
-		Where("user_id IN (?)", bun.In(userIDs)).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to delete user reasons: %w", err)
-	}
-
 	// Update user status to past offender
-	_, err = tx.NewUpdate().
+	_, err := tx.NewUpdate().
 		Model((*types.User)(nil)).
 		Set("status = ?", enum.UserTypePastOffender).
-		Set("confidence = 0").
 		Set("last_updated = ?", time.Now()).
 		Where("id IN (?)", bun.In(userIDs)).
 		Exec(ctx)

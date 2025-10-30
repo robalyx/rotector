@@ -136,13 +136,10 @@ func (w *Worker) Start(ctx context.Context) {
 		// Step 7: Process group thumbnails (60%)
 		w.processGroupThumbnails(ctx)
 
-		// Step 8: Process old Discord server members (70%)
-		w.processOldServerMembers(ctx)
-
-		// Step 9: Process reviewer info (80%)
+		// Step 8: Process reviewer info (80%)
 		w.processReviewerInfo(ctx)
 
-		// Step 10: Completed (100%)
+		// Step 9: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)
 		w.reporter.UpdateStatus("Completed", 100)
 
@@ -613,28 +610,6 @@ func (w *Worker) processGroupThumbnails(ctx context.Context) {
 	w.logger.Info("Updated group thumbnails",
 		zap.Int("processedCount", len(groups)),
 		zap.Int("updatedCount", len(updatedGroups)))
-}
-
-// processOldServerMembers removes Discord server member records older than 7 days.
-func (w *Worker) processOldServerMembers(ctx context.Context) {
-	w.bar.SetStepMessage("Processing old Discord server members", 70)
-	w.reporter.UpdateStatus("Processing old Discord server members", 70)
-
-	cutoffDate := time.Now().AddDate(0, 0, -7) // 7 days ago
-
-	affected, err := w.db.Model().Sync().PurgeOldServerMembers(ctx, cutoffDate)
-	if err != nil {
-		w.logger.Error("Error purging old Discord server members", zap.Error(err))
-		w.reporter.SetHealthy(false)
-
-		return
-	}
-
-	if affected > 0 {
-		w.logger.Info("Purged old Discord server members",
-			zap.Int("affected", affected),
-			zap.Time("cutoffDate", cutoffDate))
-	}
 }
 
 // processReviewerInfo updates cached Discord user information for reviewers.

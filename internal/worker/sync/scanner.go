@@ -2,8 +2,11 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/discord"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
@@ -34,20 +37,101 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 				return
 			}
 
-			if !w.scanner.ShouldScan(ctx, userID) {
-				continue
+			// Get all scanners to check in all accounts
+			scanners := w.scannerPool.GetAll()
+			if len(scanners) == 0 {
+				w.logger.Error("No scanners available")
+				break
 			}
 
-			if err := w.discordRateLimiter.waitForNextSlot(ctx); err != nil {
-				w.logger.Info("Context cancelled during rate limit wait, stopping mutual scanner")
-				return
+			// Track successful scans and collect connections from all scanners
+			var (
+				allConnections []*types.DiscordRobloxConnection
+				username       string
+			)
+
+			successfulScans := 0
+			visibilityErrors := 0
+
+			for accountIndex, scanner := range scanners {
+				if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled during account scan, stopping mutual scanner") {
+					return
+				}
+
+				// Wait for rate limit using the specific account's rate limiter
+				if accountIndex >= 0 && accountIndex < len(w.discordRateLimiters) {
+					if err := w.discordRateLimiters[accountIndex].waitForNextSlot(ctx); err != nil {
+						w.logger.Info("Context cancelled during rate limit wait, stopping mutual scanner",
+							zap.Int("account_index", accountIndex))
+
+						return
+					}
+				}
+
+				// Perform scan on user
+				scannedUsername, connections, err := scanner.PerformFullScan(ctx, userID, false)
+				if err != nil {
+					if errors.Is(err, discord.ErrUserNotVisible) {
+						visibilityErrors++
+					} else {
+						w.logger.Error("Failed to perform full scan",
+							zap.Error(err),
+							zap.Uint64("userID", userID),
+							zap.Int("account_index", accountIndex))
+					}
+				} else {
+					successfulScans++
+
+					if username == "" {
+						username = scannedUsername
+					}
+
+					allConnections = append(allConnections, connections...)
+				}
 			}
 
-			_, err := w.scanner.PerformFullScan(ctx, userID)
-			if err != nil {
-				w.logger.Error("Failed to perform full scan",
-					zap.Error(err),
-					zap.Uint64("userID", userID))
+			// Add verification connections once
+			if successfulScans > 0 {
+				verificationConns := w.verificationManager.FetchAllVerificationProfiles(ctx, userID)
+				allConnections = append(allConnections, verificationConns...)
+
+				// Process all connections once
+				if len(allConnections) > 0 {
+					if err := w.scannerPool.ProcessConnections(ctx, userID, allConnections); err != nil {
+						w.logger.Error("Failed to process connections",
+							zap.Error(err),
+							zap.Uint64("userID", userID))
+					}
+				}
+			}
+
+			// Update scan timestamp
+			switch {
+			case successfulScans > 0:
+				if err := w.db.Model().Sync().UpdateUserScanTimestamp(ctx, userID); err != nil {
+					w.logger.Error("Failed to update user scan timestamp",
+						zap.Error(err),
+						zap.Uint64("userID", userID))
+				} else {
+					w.logger.Info("Completed full scan",
+						zap.Uint64("userID", userID),
+						zap.Int("successful_accounts", successfulScans),
+						zap.Int("total_accounts", len(scanners)))
+				}
+			case visibilityErrors == len(scanners):
+				if err := w.db.Model().Sync().UpdateUserScanTimestamp(ctx, userID); err != nil {
+					w.logger.Error("Failed to update user scan timestamp",
+						zap.Error(err),
+						zap.Uint64("userID", userID))
+				} else {
+					w.logger.Info("User not visible to any scanner, skipping",
+						zap.Uint64("userID", userID),
+						zap.Int("total_accounts", len(scanners)))
+				}
+			default:
+				w.logger.Error("All accounts failed to scan user, will retry next cycle",
+					zap.Uint64("userID", userID),
+					zap.Int("total_accounts", len(scanners)))
 			}
 		}
 

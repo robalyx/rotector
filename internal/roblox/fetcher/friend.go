@@ -102,12 +102,33 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID int64) ([]*apiTyp
 		return nil, fmt.Errorf("failed to get friend count: %w", err)
 	}
 
-	// For users with ≤200 friends, use the legacy endpoint
+	// For users with ≤200 friends, try the legacy endpoint
 	if friendCount <= 200 {
-		return f.getFriendsLegacy(ctx, userID)
+		friends, err := f.getFriendsLegacy(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Check if legacy endpoint returned invalid data
+		hasEmptyNames := false
+
+		for _, friend := range friends {
+			if friend.ID != -1 && friend.Name == "" {
+				hasEmptyNames = true
+				break
+			}
+		}
+
+		// Return data if valid
+		if !hasEmptyNames {
+			return friends, nil
+		}
+
+		f.logger.Warn("Legacy endpoint returned invalid data, falling back to pagination",
+			zap.Int64("userID", userID))
 	}
 
-	// For users with >200 friends, get IDs then fetch details
+	// For users with >200 friends or invalid legacy data, get IDs then fetch details
 	friendIDs, err := f.GetFriendIDs(ctx, userID)
 	if err != nil {
 		return nil, err

@@ -176,5 +176,19 @@ message_fallback_model = "gpt-5-mini"
 "gpt-5-mini" = { input = 0.25, completion = 2.00, reasoning = 2.00 }
 
 [common.discord]
-# Self-bot token for server scanning
-sync_token = ""
+# Self-bot tokens for server scanning
+sync_tokens = []
+
+# Primary verification service configuration
+[common.discord.verification_service_a]
+token = ""
+guild_id = 0
+channel_id = 0
+command_name = ""
+
+# Secondary verification service configuration
+[common.discord.verification_service_b]
+token = ""
+guild_id = 0
+channel_id = 0
+command_name = ""

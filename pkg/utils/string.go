@@ -1,15 +1,28 @@
 package utils
 
 import (
+	"errors"
+	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
-// MultipleSpaces matches any sequence of whitespace (including newlines).
-var MultipleSpaces = regexp.MustCompile(`\s+`)
+var (
+	// ErrInvalidRobloxMarkdown indicates the markdown format is invalid.
+	ErrInvalidRobloxMarkdown = errors.New("invalid roblox markdown format")
+	// ErrInvalidRobloxUserID indicates the user ID cannot be parsed.
+	ErrInvalidRobloxUserID = errors.New("invalid roblox user id")
+)
 
-// ValidCommentCharsRegex matches only allowed characters in community notes.
-var ValidCommentCharsRegex = regexp.MustCompile(`^[a-zA-Z0-9\s.,''\-\n]+$`)
+var (
+	// MultipleSpaces matches any sequence of whitespace (including newlines).
+	MultipleSpaces = regexp.MustCompile(`\s+`)
+	// ValidCommentCharsRegex matches only allowed characters in community notes.
+	ValidCommentCharsRegex = regexp.MustCompile(`^[a-zA-Z0-9\s.,''\-\n]+$`)
+	// RobloxMarkdownRegex matches Roblox user information in markdown format.
+	RobloxMarkdownRegex = regexp.MustCompile(`\[(.+)\]\(https://www\.roblox\.com/users/(\d+)/profile\)\s*\((\d+)\)`)
+)
 
 // CompressAllWhitespace replaces all whitespace sequences (including newlines) with a single space.
 // This is useful for cases where you want to completely normalize whitespace.
@@ -90,4 +103,24 @@ func ValidateCommentText(text string) bool {
 
 	// Check if all characters in the text are allowed
 	return ValidCommentCharsRegex.MatchString(text)
+}
+
+// ParseRobloxMarkdown extracts Roblox user ID and username from markdown-formatted text.
+// Expected format: [Username](https://www.roblox.com/users/USERID/profile) (USERID)
+// Returns the user ID, username, and an error if the format is invalid.
+func ParseRobloxMarkdown(content string) (int64, string, error) {
+	matches := RobloxMarkdownRegex.FindStringSubmatch(content)
+
+	if len(matches) < 4 {
+		return 0, "", ErrInvalidRobloxMarkdown
+	}
+
+	username := matches[1]
+
+	robloxID, err := strconv.ParseInt(matches[3], 10, 64)
+	if err != nil {
+		return 0, "", fmt.Errorf("%w: %s", ErrInvalidRobloxUserID, matches[3])
+	}
+
+	return robloxID, username, nil
 }

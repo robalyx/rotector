@@ -181,11 +181,6 @@ func (u *UserFlags) UpdateToPastOffender(ctx context.Context, userIDs []int64) e
 
 		query := `UPDATE user_flags
 			SET flag_type = ?,
-			    confidence = 0,
-			    reasons = NULL,
-			    reviewer_id = NULL,
-			    reviewer_username = NULL,
-			    reviewer_display_name = NULL,
 			    is_reportable = 0,
 			    last_updated = ?
 			WHERE user_id IN (`
