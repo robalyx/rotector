@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/snowflake/v2"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
@@ -127,33 +126,34 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 
 	session.DiscordUserDataRedacted.Set(s, isRedacted)
 
-	var username string
+	username := "Unknown"
 
-	// Only perform full scan if user is not whitelisted
 	if !isWhitelisted {
-		// Fetch verification connections
-		verificationConns := m.layout.verificationManager.FetchAllVerificationProfiles(ctx.Context(), discordUserID)
-
-		// Get scanner from pool for load distribution
 		scanner := m.layout.getNextScanner()
-		if scanner != nil {
-			username, err = scanner.PerformFullScan(ctx.Context(), discordUserID, true, verificationConns)
+		if scanner == nil {
+			m.layout.logger.Warn("No scanners available for user lookup")
+		} else {
+			scannedUsername, connections, err := scanner.PerformFullScan(ctx.Context(), discordUserID, true)
 			if err != nil {
 				m.layout.logger.Error("Failed to perform full scan",
 					zap.Error(err),
 					zap.Uint64("discord_userID", discordUserID))
-			}
-		} else {
-			m.layout.logger.Warn("No scanners available for user lookup")
-		}
-	}
+			} else {
+				username = scannedUsername
 
-	// If we don't have a username yet (either whitelisted or scan failed), try to get it from Discord
-	if username == "" {
-		if user, err := ctx.Event().Client().Rest.GetUser(snowflake.ID(discordUserID)); err == nil {
-			username = user.Username
-		} else {
-			username = "Unknown"
+				// Fetch and add verification connections
+				verificationConns := m.layout.verificationManager.FetchAllVerificationProfiles(ctx.Context(), discordUserID)
+				connections = append(connections, verificationConns...)
+
+				// Process all connections
+				if len(connections) > 0 {
+					if err := m.layout.scannerPool.ProcessConnections(ctx.Context(), discordUserID, connections); err != nil {
+						m.layout.logger.Error("Failed to process connections",
+							zap.Error(err),
+							zap.Uint64("discord_userID", discordUserID))
+					}
+				}
+			}
 		}
 	}
 

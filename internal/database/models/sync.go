@@ -161,6 +161,30 @@ func (m *SyncModel) RemoveServerMember(ctx context.Context, serverID, userID uin
 	})
 }
 
+// GetDiscordUserGuilds returns all guild IDs for a specific Discord user.
+func (m *SyncModel) GetDiscordUserGuilds(ctx context.Context, discordUserID uint64) ([]uint64, error) {
+	var guildIDs []uint64
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		err := m.db.NewSelect().
+			Model((*types.DiscordServerMember)(nil)).
+			Column("server_id").
+			Where("user_id = ?", discordUserID).
+			Order("server_id ASC").
+			Scan(ctx, &guildIDs)
+		if err != nil {
+			return fmt.Errorf("failed to get Discord user guilds: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return guildIDs, nil
+}
+
 // GetDiscordUserGuildsByCursor returns paginated guild memberships for a specific Discord user.
 func (m *SyncModel) GetDiscordUserGuildsByCursor(
 	ctx context.Context, discordUserID uint64, cursor *types.GuildCursor, limit int,

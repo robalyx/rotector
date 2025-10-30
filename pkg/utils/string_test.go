@@ -446,7 +446,7 @@ func TestParseRobloxMarkdown(t *testing.T) {
 			wantUserID:   0,
 			wantUsername: "",
 			wantErr:      true,
-			errSubstring: "invalid roblox id",
+			errSubstring: "invalid roblox markdown format",
 		},
 		{
 			name:         "invalid format - empty string",

@@ -39,6 +39,7 @@ type syncProgress struct {
 	processedGuilds  atomic.Int64
 	successfulGuilds atomic.Int64
 	failedGuilds     atomic.Int64
+	skippedGuilds    atomic.Int64
 }
 
 // syncCycle attempts to sync all servers across all accounts in parallel.
@@ -104,11 +105,12 @@ func (w *Worker) syncCycle(ctx context.Context) {
 				processed := progress.processedGuilds.Load()
 				successful := progress.successfulGuilds.Load()
 				failed := progress.failedGuilds.Load()
+				skipped := progress.skippedGuilds.Load()
 
 				if total > 0 {
 					progressPercent := (processed * 100) / total
-					w.bar.SetStepMessage(fmt.Sprintf("Processing: %d/%d guilds across %d accounts [%d OK, %d fail]",
-						processed, total, len(w.states), successful, failed), progressPercent)
+					w.bar.SetStepMessage(fmt.Sprintf("Processing: %d/%d guilds across %d accounts [%d OK, %d fail, %d skip]",
+						processed, total, len(w.states), successful, failed, skipped), progressPercent)
 				}
 			}
 		}
@@ -185,7 +187,7 @@ func (w *Worker) syncAccountServers(
 		w.seenServersMutex.Lock()
 
 		if existingAccountIndex, exists := w.seenServers[serverID]; exists {
-			w.logger.Error("Duplicate server detected across accounts, skipping",
+			w.logger.Info("Duplicate server detected across accounts, skipping",
 				zap.Uint64("serverID", serverID),
 				zap.String("server_name", guild.Name),
 				zap.Int("account_index", accountIndex),
@@ -193,10 +195,8 @@ func (w *Worker) syncAccountServers(
 
 			w.seenServersMutex.Unlock()
 
-			failedGuilds++
-
 			progress.processedGuilds.Add(1)
-			progress.failedGuilds.Add(1)
+			progress.skippedGuilds.Add(1)
 
 			continue
 		}
@@ -592,12 +592,6 @@ func (w *Worker) syncMemberChunksForAccount(
 
 			membersMutex.Unlock()
 
-			w.logger.Debug("Member list status",
-				zap.Int("account_index", accountIndex),
-				zap.Int("max_chunk", currentMaxChunk),
-				zap.Int("total_visible", list.TotalVisible()),
-				zap.Int("processed_members", currentMemberCount))
-
 			time.Sleep(50 * time.Millisecond)
 
 			if consecutiveNoProgress >= maxConsecutiveNoProgressIter {
@@ -642,14 +636,16 @@ func (w *Worker) syncMemberChunksForAccount(
 				nextChunk := currentMaxChunk + 1
 
 				// Wait for rate limit before making request
-				if accountIndex < len(w.discordRateLimiters) {
-					if err := w.discordRateLimiters[accountIndex].waitForNextSlot(ctx); err != nil {
-						w.logger.Debug("Context cancelled during rate limit wait",
-							zap.Int("account_index", accountIndex),
-							zap.String("guildID", guildID.String()))
+				if accountIndex >= len(w.discordRateLimiters) {
+					return allMembers, fmt.Errorf("%w: %d", ErrRateLimiterNotFound, accountIndex)
+				}
 
-						return allMembers, ctx.Err()
-					}
+				if err := w.discordRateLimiters[accountIndex].waitForNextSlot(ctx); err != nil {
+					w.logger.Debug("Context cancelled during rate limit wait",
+						zap.Int("account_index", accountIndex),
+						zap.String("guildID", guildID.String()))
+
+					return allMembers, ctx.Err()
 				}
 
 				ms.RequestMemberList(ctx, guildID, channelID, nextChunk)
@@ -686,14 +682,16 @@ func (w *Worker) handleMemberListNotFoundForAccount(
 	}
 
 	// Wait for rate limit before making request
-	if accountIndex < len(w.discordRateLimiters) {
-		if err := w.discordRateLimiters[accountIndex].waitForNextSlot(ctx); err != nil {
-			w.logger.Debug("Context cancelled during rate limit wait",
-				zap.Int("account_index", accountIndex),
-				zap.String("guildID", guildID.String()))
+	if accountIndex >= len(w.discordRateLimiters) {
+		return false, fmt.Errorf("%w: %d", ErrRateLimiterNotFound, accountIndex)
+	}
 
-			return false, ctx.Err()
-		}
+	if err := w.discordRateLimiters[accountIndex].waitForNextSlot(ctx); err != nil {
+		w.logger.Debug("Context cancelled during rate limit wait",
+			zap.Int("account_index", accountIndex),
+			zap.String("guildID", guildID.String()))
+
+		return false, ctx.Err()
 	}
 
 	// Try again with a new request
