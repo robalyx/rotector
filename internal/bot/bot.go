@@ -37,18 +37,20 @@ import (
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types/enum"
+	"github.com/robalyx/rotector/internal/discord/verification"
 	"github.com/robalyx/rotector/internal/setup"
 	"go.uber.org/zap"
 )
 
 // Bot handles all the layouts and managers needed for Discord interaction.
 type Bot struct {
-	db                 database.Client
-	client             *bot.Client
-	logger             *zap.Logger
-	sessionManager     *session.Manager
-	interactionManager *interaction.Manager
-	guildEventHandler  *eventHandler.GuildEventHandler
+	db                  database.Client
+	client              *bot.Client
+	logger              *zap.Logger
+	sessionManager      *session.Manager
+	interactionManager  *interaction.Manager
+	guildEventHandler   *eventHandler.GuildEventHandler
+	verificationManager *verification.ServiceManager
 }
 
 // New initializes a Bot instance by creating all required managers and layouts.
@@ -64,20 +66,33 @@ func New(app *setup.App) (*Bot, error) {
 	interactionManager := interaction.NewManager(sessionManager, logger)
 	guildEventHandler := eventHandler.NewGuildEventHandler(logger)
 
-	// Initialize self-bot client
-	selfClient := state.NewWithIntents(app.Config.Common.Discord.SyncToken,
-		aGateway.IntentGuilds|aGateway.IntentGuildMembers)
+	// Create verification service manager
+	verificationManager, err := verification.NewServiceManager(app.Config.Common.Discord, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create verification services: %w", err)
+	}
 
-	// Disguise user agent
-	selfClient.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
+	// Initialize self-bot clients
+	selfClients := make([]*state.State, 0, len(app.Config.Common.Discord.SyncTokens))
+	for i, token := range app.Config.Common.Discord.SyncTokens {
+		client := state.NewWithIntents(token,
+			aGateway.IntentGuilds|aGateway.IntentGuildMembers)
+
+		client.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
+
+		selfClients = append(selfClients, client)
+
+		logger.Info("Initialized self-bot client", zap.Int("client_index", i))
+	}
 
 	// Create bot instance
 	b := &Bot{
-		db:                 app.DB,
-		logger:             logger,
-		sessionManager:     sessionManager,
-		interactionManager: interactionManager,
-		guildEventHandler:  guildEventHandler,
+		db:                  app.DB,
+		logger:              logger,
+		sessionManager:      sessionManager,
+		interactionManager:  interactionManager,
+		guildEventHandler:   guildEventHandler,
+		verificationManager: verificationManager,
 	}
 
 	// Create shard manager options
@@ -141,7 +156,7 @@ func New(app *setup.App) (*Bot, error) {
 	dashboardLayout := dashboard.New(app, sessionManager)
 	consentLayout := consent.New(app)
 	reviewerLayout := reviewer.New(app, client)
-	guildLayout := guild.New(app, selfClient)
+	guildLayout := guild.New(app, selfClients, verificationManager)
 	queueLayout := queue.New(app)
 
 	interactionManager.AddPages(selectorLayout.Pages())
@@ -177,6 +192,11 @@ func (b *Bot) Start() error {
 		return fmt.Errorf("failed to register commands: %w", err)
 	}
 
+	// Start verification services
+	if err := b.verificationManager.Start(context.Background()); err != nil {
+		return fmt.Errorf("failed to start verification services: %w", err)
+	}
+
 	// Open gateway connection
 	err = b.client.OpenGateway(context.Background())
 	if err != nil {
@@ -193,6 +213,11 @@ func (b *Bot) Start() error {
 func (b *Bot) Close() {
 	b.logger.Info("Closing bot")
 	b.client.Close(context.Background())
+
+	// Close verification services
+	if err := b.verificationManager.Close(); err != nil {
+		b.logger.Error("Failed to close verification services", zap.Error(err))
+	}
 }
 
 // handleApplicationCommandInteraction processes slash commands.

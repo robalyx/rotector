@@ -6,7 +6,6 @@ request_timeout = 5000
 
 [bot.discord]
 # Discord bot token for authentication
-# Get this from the Discord Developer Portal
 token = ""
 
 [bot.discord.sharding]
@@ -24,4 +23,4 @@ split_count = 2
 # Comma-separated list of shard IDs to manage
 # Leave empty to manage all shards
 # Example: "0,1,2" to only manage first 3 shards
-shard_ids = "" 
+shard_ids = ""

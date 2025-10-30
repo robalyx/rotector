@@ -521,7 +521,13 @@ func (b *ReviewBuilder) getFriends() string {
 			break
 		}
 
-		name := utils.CensorString(friend.Name, b.PrivacyMode)
+		name := friend.Name
+		if name == "" {
+			name = "Unknown"
+		} else {
+			name = utils.CensorString(name, b.PrivacyMode)
+		}
+
 		if b.trainingMode {
 			friends = append(friends, name)
 		} else {

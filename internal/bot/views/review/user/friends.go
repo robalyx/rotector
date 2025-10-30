@@ -192,7 +192,13 @@ func (b *FriendsBuilder) getFriendFieldName(friend *apiTypes.ExtendedFriend) str
 	}
 
 	// Add friend name (with link in standard mode)
-	name := utils.CensorString(friend.Name, b.privacyMode)
+	name := friend.Name
+	if name == "" {
+		name = "Unknown"
+	} else {
+		name = utils.CensorString(name, b.privacyMode)
+	}
+
 	if !b.trainingMode {
 		name = fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", name, friend.ID)
 	}

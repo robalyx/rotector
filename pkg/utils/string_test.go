@@ -5,6 +5,7 @@ import (
 
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCompressAllWhitespace(t *testing.T) {
@@ -351,6 +352,139 @@ func TestValidateCommentText(t *testing.T) {
 			if result != tt.expected {
 				t.Errorf("ValidateCommentText(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
+		})
+	}
+}
+
+func TestParseRobloxMarkdown(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		input        string
+		wantUserID   int64
+		wantUsername string
+		wantErr      bool
+		errSubstring string
+	}{
+		{
+			name:         "basic username",
+			input:        "### [TestUser](https://www.roblox.com/users/123456789/profile) (123456789)",
+			wantUserID:   123456789,
+			wantUsername: "TestUser",
+			wantErr:      false,
+		},
+		{
+			name:         "username with spaces",
+			input:        "### [Test User](https://www.roblox.com/users/987654321/profile) (987654321)",
+			wantUserID:   987654321,
+			wantUsername: "Test User",
+			wantErr:      false,
+		},
+		{
+			name:         "username with special characters",
+			input:        "### [Test_User-123](https://www.roblox.com/users/111222333/profile) (111222333)",
+			wantUserID:   111222333,
+			wantUsername: "Test_User-123",
+			wantErr:      false,
+		},
+		{
+			name:         "username with brackets and special chars",
+			input:        "### [CoolUser ★ [PRO]](https://www.roblox.com/users/2468013579/profile) (2468013579)",
+			wantUserID:   2468013579,
+			wantUsername: "CoolUser ★ [PRO]",
+			wantErr:      false,
+		},
+		{
+			name:         "username with multiple brackets",
+			input:        "### [Player[VIP][ADMIN]](https://www.roblox.com/users/1357924680/profile) (1357924680)",
+			wantUserID:   1357924680,
+			wantUsername: "Player[VIP][ADMIN]",
+			wantErr:      false,
+		},
+		{
+			name:         "username with unicode and brackets",
+			input:        "### [GamerPro [EU]](https://www.roblox.com/users/9876543210/profile) (9876543210)",
+			wantUserID:   9876543210,
+			wantUsername: "GamerPro [EU]",
+			wantErr:      false,
+		},
+		{
+			name:         "without markdown header",
+			input:        "[PlainUser](https://www.roblox.com/users/444555666/profile) (444555666)",
+			wantUserID:   444555666,
+			wantUsername: "PlainUser",
+			wantErr:      false,
+		},
+		{
+			name:         "invalid format - missing url",
+			input:        "### [TestUser] (123456789)",
+			wantUserID:   0,
+			wantUsername: "",
+			wantErr:      true,
+			errSubstring: "invalid roblox markdown format",
+		},
+		{
+			name:         "invalid format - missing username",
+			input:        "### (https://www.roblox.com/users/123456789/profile) (123456789)",
+			wantUserID:   0,
+			wantUsername: "",
+			wantErr:      true,
+			errSubstring: "invalid roblox markdown format",
+		},
+		{
+			name:         "invalid format - missing userid in parentheses",
+			input:        "### [TestUser](https://www.roblox.com/users/123456789/profile)",
+			wantUserID:   0,
+			wantUsername: "",
+			wantErr:      true,
+			errSubstring: "invalid roblox markdown format",
+		},
+		{
+			name:         "invalid format - non-numeric userid",
+			input:        "### [TestUser](https://www.roblox.com/users/abc/profile) (abc)",
+			wantUserID:   0,
+			wantUsername: "",
+			wantErr:      true,
+			errSubstring: "invalid roblox id",
+		},
+		{
+			name:         "invalid format - empty string",
+			input:        "",
+			wantUserID:   0,
+			wantUsername: "",
+			wantErr:      true,
+			errSubstring: "invalid roblox markdown format",
+		},
+		{
+			name:         "invalid format - random text",
+			input:        "This is just random text without any markdown",
+			wantUserID:   0,
+			wantUsername: "",
+			wantErr:      true,
+			errSubstring: "invalid roblox markdown format",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotUserID, gotUsername, err := utils.ParseRobloxMarkdown(tt.input)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+
+				if tt.errSubstring != "" {
+					assert.Contains(t, err.Error(), tt.errSubstring)
+				}
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantUserID, gotUserID)
+			assert.Equal(t, tt.wantUsername, gotUsername)
 		})
 	}
 }
