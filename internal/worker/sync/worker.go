@@ -32,6 +32,7 @@ var (
 	ErrNoTextChannel        = errors.New("no text channel found in guild")
 	ErrAllChannelsAttempted = errors.New("all available channels have been attempted")
 	ErrListNotFoundRetry    = errors.New("member list not found after multiple attempts")
+	ErrRateLimiterNotFound  = errors.New("rate limiter not found for account")
 )
 
 // Worker handles syncing Discord server members.
@@ -130,7 +131,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		roAPI:               app.RoAPI,
 		states:              states,
 		memberStates:        memberStates,
-		scannerPool:         discord.NewScannerPool(scanners),
+		scannerPool:         discord.NewScannerPool(scanners, app.DB, syncLogger),
 		verificationManager: verificationManager,
 		bar:                 bar,
 		reporter:            reporter,

@@ -100,12 +100,24 @@ func (s *ServiceB) ExecuteCommand(ctx context.Context, discordUserID uint64) (*R
 
 	// Create response channel and pending request
 	responseChan := make(chan *Response, 1)
-
-	s.executor.mu.Lock()
-	s.executor.pendingRequests[nonce] = &pendingRequest{
+	pendingReq := &pendingRequest{
 		channel: responseChan,
 	}
+
+	s.executor.mu.Lock()
+	s.executor.pendingRequests[nonce] = pendingReq
 	s.executor.mu.Unlock()
+
+	// Cleanup mappings
+	defer func() {
+		s.executor.mu.Lock()
+
+		if req, ok := s.executor.pendingRequests[nonce]; ok && req == pendingReq {
+			delete(s.executor.pendingRequests, nonce)
+		}
+
+		s.executor.mu.Unlock()
+	}()
 
 	// Execute the interaction
 	_, err = s.executor.breaker.Execute(func() (any, error) {

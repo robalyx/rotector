@@ -207,6 +207,18 @@ func (e *BaseExecutor) handleMessage(msg discord.Message) {
 		return
 	}
 
+	// Cleanup mappings
+	defer func() {
+		e.mu.Lock()
+		delete(e.pendingRequests, messageID)
+
+		if nonce != "" {
+			delete(e.pendingRequests, nonce)
+		}
+
+		e.mu.Unlock()
+	}()
+
 	// Fetch full message data from channel messages API
 	response, err := e.findVerificationResponse(messageID)
 	if err != nil {
@@ -231,16 +243,6 @@ func (e *BaseExecutor) handleMessage(msg discord.Message) {
 		e.logger.Warn("Response channel full",
 			zap.String("message_id", messageID))
 	}
-
-	// Clean up mappings
-	e.mu.Lock()
-	delete(e.pendingRequests, messageID)
-
-	if nonce != "" {
-		delete(e.pendingRequests, nonce)
-	}
-
-	e.mu.Unlock()
 }
 
 // discoverCommand fetches and caches the command information.

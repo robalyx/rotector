@@ -48,7 +48,7 @@ func New(app *setup.App, clients []*state.State, verificationManager *verificati
 	}
 
 	// Create scanner pool
-	scannerPool := discord.NewScannerPool(scanners)
+	scannerPool := discord.NewScannerPool(scanners, app.DB, app.Logger)
 
 	l := &Layout{
 		db:                  app.DB,

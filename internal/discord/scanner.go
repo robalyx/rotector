@@ -99,9 +99,9 @@ func NewScanner(
 	}
 }
 
-// PerformFullScan executes a full guild scan for a user and returns their username if found.
+// PerformFullScan executes a full guild scan for a user and returns their username and discovered connections.
 // If updateScanTime is true, the user's last scan timestamp will be updated.
-func (s *Scanner) PerformFullScan(ctx context.Context, userID uint64, updateScanTime bool, verificationConns []*types.DiscordRobloxConnection) (string, error) {
+func (s *Scanner) PerformFullScan(ctx context.Context, userID uint64, updateScanTime bool) (string, []*types.DiscordRobloxConnection, error) {
 	// Fetch mutual guilds
 	var profile UserProfile
 
@@ -130,10 +130,10 @@ func (s *Scanner) PerformFullScan(ctx context.Context, userID uint64, updateScan
 			s.logger.Warn("Discord API circuit breaker is open, skipping user scan",
 				zap.Uint64("userID", userID))
 
-			return "", fmt.Errorf("circuit breaker open: %w", err)
+			return "", nil, fmt.Errorf("circuit breaker open: %w", err)
 		}
 
-		return "", fmt.Errorf("failed to fetch profile: %w", err)
+		return "", nil, fmt.Errorf("failed to fetch profile: %w", err)
 	}
 
 	// Handle cases where scanner cannot see the user
@@ -142,7 +142,7 @@ func (s *Scanner) PerformFullScan(ctx context.Context, userID uint64, updateScan
 			zap.Uint64("userID", userID),
 			zap.String("scannerID", s.scannerID))
 
-		return "", fmt.Errorf("%w: userID=%d", ErrUserNotVisible, userID)
+		return "", nil, fmt.Errorf("%w: userID=%d", ErrUserNotVisible, userID)
 	}
 
 	// Process mutual guilds
@@ -164,13 +164,12 @@ func (s *Scanner) PerformFullScan(ctx context.Context, userID uint64, updateScan
 
 	// Batch upsert members
 	if err := s.db.Model().Sync().UpsertServerMembers(ctx, members, updateScanTime); err != nil {
-		return "", fmt.Errorf("failed to upsert server members: %w", err)
+		return "", nil, fmt.Errorf("failed to upsert server members: %w", err)
 	}
 
-	// Collect all Roblox connections from various sources
-	var allConnections []*types.DiscordRobloxConnection
-
 	// Extract Roblox connections from Discord profile
+	var discoveredConnections []*types.DiscordRobloxConnection
+
 	for _, account := range profile.ConnectedAccounts {
 		if account.Type == "roblox" && account.Verified {
 			robloxUserID, err := strconv.ParseInt(account.ID, 10, 64)
@@ -182,7 +181,7 @@ func (s *Scanner) PerformFullScan(ctx context.Context, userID uint64, updateScan
 				continue
 			}
 
-			allConnections = append(allConnections, &types.DiscordRobloxConnection{
+			discoveredConnections = append(discoveredConnections, &types.DiscordRobloxConnection{
 				DiscordUserID:  userID,
 				RobloxUserID:   robloxUserID,
 				RobloxUsername: account.Name,
@@ -193,31 +192,12 @@ func (s *Scanner) PerformFullScan(ctx context.Context, userID uint64, updateScan
 		}
 	}
 
-	// Add other verification service connections
-	allConnections = append(allConnections, verificationConns...)
-
-	// Deduplicate connections by Roblox user ID
-	uniqueConnections := make(map[int64]*types.DiscordRobloxConnection)
-	duplicateCount := 0
-
-	for _, conn := range allConnections {
-		if _, exists := uniqueConnections[conn.RobloxUserID]; !exists {
-			uniqueConnections[conn.RobloxUserID] = conn
-		} else {
-			duplicateCount++
-		}
-	}
-
-	// Process each unique connection
-	for _, connection := range uniqueConnections {
-		s.processRobloxConnection(ctx, userID, connection, &profile)
-	}
-
 	s.logger.Info("Full scan complete",
 		zap.Uint64("userID", userID),
-		zap.Int("guild_count", len(profile.MutualGuilds)))
+		zap.Int("guild_count", len(profile.MutualGuilds)),
+		zap.Int("connections_found", len(discoveredConnections)))
 
-	return profile.User.Username, nil
+	return profile.User.Username, discoveredConnections, nil
 }
 
 // FetchUserMessages fetches the first page of messages for a user in a specific guild.
@@ -283,10 +263,10 @@ func (s *Scanner) FetchUserMessages(guildID, userID uint64) ([]*ai.MessageConten
 
 // AnalyzeAndFlagUser analyzes a Discord user's messages and flags their Roblox account if needed.
 func (s *Scanner) AnalyzeAndFlagUser(
-	ctx context.Context, userID uint64, profile *UserProfile, robloxUserID int64, existingUser *types.ReviewUser,
+	ctx context.Context, userID uint64, guildIDs []uint64, robloxUserID int64, existingUser *types.ReviewUser,
 ) error {
 	// Check if user meets condo server threshold (3+ mutual guilds)
-	guildCount := len(profile.MutualGuilds)
+	guildCount := len(guildIDs)
 	meetsGuildThreshold := guildCount >= 3
 
 	s.logger.Info("Evaluating user for flagging",
@@ -313,16 +293,7 @@ func (s *Scanner) AnalyzeAndFlagUser(
 	}
 
 	// Analyze messages from each mutual guild
-	for _, guild := range profile.MutualGuilds {
-		guildID, err := strconv.ParseUint(guild.ID, 10, 64)
-		if err != nil {
-			s.logger.Warn("Failed to parse guild ID",
-				zap.String("guildID", guild.ID),
-				zap.Error(err))
-
-			continue
-		}
-
+	for _, guildID := range guildIDs {
 		// Fetch messages for this guild
 		messages, err := s.FetchUserMessages(guildID, userID)
 		if err != nil {
@@ -544,7 +515,7 @@ func calculateMessageConfidence(messages []ai.FlaggedMessage) float64 {
 
 // processRobloxConnection stores and processes a discovered Roblox connection.
 func (s *Scanner) processRobloxConnection(
-	ctx context.Context, discordUserID uint64, connection *types.DiscordRobloxConnection, profile *UserProfile,
+	ctx context.Context, discordUserID uint64, connection *types.DiscordRobloxConnection, guildIDs []uint64,
 ) {
 	// Store the connection
 	if err := s.db.Model().Sync().UpsertDiscordRobloxConnection(ctx, connection); err != nil {
@@ -570,7 +541,7 @@ func (s *Scanner) processRobloxConnection(
 	if err == nil {
 		// Check if user already has condo reason
 		if condoReason := existingUser.Reasons[enum.UserReasonTypeCondo]; condoReason != nil {
-			guildCount := len(profile.MutualGuilds)
+			guildCount := len(guildIDs)
 
 			// Only update if guild count meets threshold
 			if guildCount >= 3 {
@@ -593,7 +564,7 @@ func (s *Scanner) processRobloxConnection(
 	}
 
 	// Analyze user's messages and flag Roblox account if needed
-	if err := s.AnalyzeAndFlagUser(ctx, discordUserID, profile, connection.RobloxUserID, existingUser); err != nil {
+	if err := s.AnalyzeAndFlagUser(ctx, discordUserID, guildIDs, connection.RobloxUserID, existingUser); err != nil {
 		s.logger.Error("Failed to analyze and flag user",
 			zap.Uint64("discordUserID", discordUserID),
 			zap.Int64("robloxUserID", connection.RobloxUserID),
