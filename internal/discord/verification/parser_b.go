@@ -170,10 +170,15 @@ func (s *ServiceB) ParseResponse(response *Response) (int64, string, error) {
 	embed := response.Embeds[0]
 
 	// Check if user is not verified
+	var description string
 	if rawDesc, ok := embed["rawDescription"].(string); ok {
-		if strings.Contains(strings.ToLower(rawDesc), "not verified") {
-			return 0, "", ErrUserNotVerified
-		}
+		description = rawDesc
+	} else if desc, ok := embed["description"].(string); ok {
+		description = desc
+	}
+
+	if description != "" && strings.Contains(strings.ToLower(description), "not verified") {
+		return 0, "", ErrUserNotVerified
 	}
 
 	// Extract fields array from embed
