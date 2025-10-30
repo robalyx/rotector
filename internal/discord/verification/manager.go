@@ -149,7 +149,15 @@ func (m *ServiceManager) FetchAllVerificationProfiles(
 						zap.String("service_name", serviceName),
 						zap.Uint64("discord_user_id", discordUserID))
 
-					time.Sleep(10 * time.Second)
+					select {
+					case <-time.After(10 * time.Second):
+					case <-ctx.Done():
+						return nil
+					}
+
+					if ctx.Err() != nil {
+						return nil
+					}
 
 					response, err = service.ExecuteCommand(ctx, discordUserID)
 					if err == nil {
