@@ -15,17 +15,13 @@ import (
 
 // ServiceManager manages verification service lifecycle and provides access to services.
 type ServiceManager struct {
-	services          []Service
-	closeableServices []interface{ Close() error }
-	logger            *zap.Logger
+	services []Service
+	logger   *zap.Logger
 }
 
 // NewServiceManager initializes verification services based on configuration.
 func NewServiceManager(discordConfig config.DiscordConfig, logger *zap.Logger) (*ServiceManager, error) {
-	var (
-		services          []Service
-		closeableServices []interface{ Close() error }
-	)
+	var services []Service
 
 	// Initialize primary verification service
 	if discordConfig.VerificationServiceA.Token != "" {
@@ -41,7 +37,6 @@ func NewServiceManager(discordConfig config.DiscordConfig, logger *zap.Logger) (
 		}
 
 		services = append(services, serviceA)
-		closeableServices = append(closeableServices, serviceA)
 
 		logger.Info("Initialized verification service A")
 	}
@@ -60,21 +55,19 @@ func NewServiceManager(discordConfig config.DiscordConfig, logger *zap.Logger) (
 		}
 
 		services = append(services, serviceB)
-		closeableServices = append(closeableServices, serviceB)
 
 		logger.Info("Initialized verification service B")
 	}
 
 	return &ServiceManager{
-		services:          services,
-		closeableServices: closeableServices,
-		logger:            logger,
+		services: services,
+		logger:   logger,
 	}, nil
 }
 
 // Start initializes all verification services.
 func (m *ServiceManager) Start(ctx context.Context) error {
-	for _, service := range m.closeableServices {
+	for _, service := range m.services {
 		if starter, ok := service.(interface{ Start(context.Context) error }); ok {
 			if err := starter.Start(ctx); err != nil {
 				return fmt.Errorf("failed to start verification service: %w", err)
@@ -87,7 +80,7 @@ func (m *ServiceManager) Start(ctx context.Context) error {
 
 // Close shuts down all verification services.
 func (m *ServiceManager) Close() error {
-	for _, service := range m.closeableServices {
+	for _, service := range m.services {
 		if err := service.Close(); err != nil {
 			m.logger.Warn("Failed to close verification service", zap.Error(err))
 		}
