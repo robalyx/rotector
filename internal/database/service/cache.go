@@ -20,11 +20,7 @@ type CacheService struct {
 }
 
 // NewCache creates a new cache service.
-func NewCache(
-	db *bun.DB,
-	model *models.CacheModel,
-	logger *zap.Logger,
-) *CacheService {
+func NewCache(db *bun.DB, model *models.CacheModel, logger *zap.Logger) *CacheService {
 	return &CacheService{
 		db:     db,
 		model:  model,
@@ -76,7 +72,7 @@ func (s *CacheService) FilterProcessedUsers(ctx context.Context, userIDs []int64
 
 	cacheHits := len(userIDs) - len(unprocessedIDs)
 
-	s.logger.Info("Filtered processed user IDs with dynamic intervals",
+	s.logger.Info("Filtered processed user IDs",
 		zap.Int("totalUserIDs", len(userIDs)),
 		zap.Int("unprocessedUserIDs", len(unprocessedIDs)),
 		zap.Int("cacheHits", cacheHits),
