@@ -2,6 +2,7 @@ package guild
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/redis/rueidis"
@@ -9,6 +10,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/discord"
+	"github.com/robalyx/rotector/internal/discord/rate"
 	"github.com/robalyx/rotector/internal/discord/verification"
 	"github.com/robalyx/rotector/internal/redis"
 	"github.com/robalyx/rotector/internal/setup"
@@ -39,11 +41,14 @@ func New(app *setup.App, clients []*state.State, verificationManager *verificati
 
 	messageAnalyzer := ai.NewMessageAnalyzer(app, app.Logger)
 
+	// Create shared rate limiter for all Discord API calls
+	discordRateLimiter := rate.New(800*time.Millisecond, 200*time.Millisecond)
+
 	// Create scanners for each client
 	scanners := make([]*discord.Scanner, 0, len(clients))
 	for i, client := range clients {
 		scannerID := fmt.Sprintf("scanner_%d", i)
-		scanner := discord.NewScanner(app.DB, app.CFClient, ratelimit, client.Session, messageAnalyzer, scannerID, app.Logger)
+		scanner := discord.NewScanner(app.DB, app.RoAPI, app.CFClient, ratelimit, client, client.Session, messageAnalyzer, discordRateLimiter, scannerID, app.Logger)
 		scanners = append(scanners, scanner)
 	}
 

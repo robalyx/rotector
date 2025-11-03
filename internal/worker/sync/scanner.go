@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/robalyx/rotector/internal/database/types"
@@ -52,28 +53,28 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 
 			successfulScans := 0
 			visibilityErrors := 0
+			temporaryErrors := 0
+
+			var lastTemporaryError error
 
 			for accountIndex, scanner := range scanners {
 				if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled during account scan, stopping mutual scanner") {
 					return
 				}
 
-				// Wait for rate limit using the specific account's rate limiter
-				if accountIndex >= 0 && accountIndex < len(w.discordRateLimiters) {
-					if err := w.discordRateLimiters[accountIndex].waitForNextSlot(ctx); err != nil {
-						w.logger.Info("Context cancelled during rate limit wait, stopping mutual scanner",
-							zap.Int("account_index", accountIndex))
+				scanCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				scannedUsername, connections, err := scanner.PerformFullScan(scanCtx, userID, false)
 
-						return
-					}
-				}
+				cancel()
 
-				// Perform scan on user
-				scannedUsername, connections, err := scanner.PerformFullScan(ctx, userID, false)
 				if err != nil {
-					if errors.Is(err, discord.ErrUserNotVisible) {
+					switch {
+					case errors.Is(err, discord.ErrUserNotVisible):
 						visibilityErrors++
-					} else {
+					case isTemporaryError(err):
+						temporaryErrors++
+						lastTemporaryError = err
+					default:
 						w.logger.Error("Failed to perform full scan",
 							zap.Error(err),
 							zap.Uint64("userID", userID),
@@ -90,18 +91,32 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 				}
 			}
 
-			// Add verification connections once
+			// Circuit breaker backoff delay
+			if temporaryErrors > 0 && temporaryErrors == len(scanners) {
+				w.logger.Info("All scanners have temporary errors, waiting before next attempt",
+					zap.Uint64("userID", userID),
+					zap.Error(lastTemporaryError),
+					zap.Duration("delay", 30*time.Second))
+
+				if utils.ContextSleep(ctx, 30*time.Second) == utils.SleepCancelled {
+					w.logger.Info("Context cancelled during temporary error wait, stopping mutual scanner")
+					return
+				}
+			}
+
+			// Add verification connections
 			if successfulScans > 0 {
 				verificationConns := w.verificationManager.FetchAllVerificationProfiles(ctx, userID)
 				allConnections = append(allConnections, verificationConns...)
 
-				// Process all connections once
 				if len(allConnections) > 0 {
-					if err := w.scannerPool.ProcessConnections(ctx, userID, allConnections); err != nil {
-						w.logger.Error("Failed to process connections",
-							zap.Error(err),
-							zap.Uint64("userID", userID))
-					}
+					go func(userID uint64, connections []*types.DiscordRobloxConnection) {
+						if err := w.scannerPool.ProcessConnections(ctx, userID, connections); err != nil {
+							w.logger.Error("Failed to process connections",
+								zap.Error(err),
+								zap.Uint64("userID", userID))
+						}
+					}(userID, allConnections)
 				}
 			}
 
@@ -128,10 +143,19 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 						zap.Uint64("userID", userID),
 						zap.Int("total_accounts", len(scanners)))
 				}
+			case temporaryErrors == len(scanners):
+				// All scanners have temporary errors (circuit breaker, rate limits)
+				// Already logged and handled with backoff, will retry next cycle
 			default:
 				w.logger.Error("All accounts failed to scan user, will retry next cycle",
 					zap.Uint64("userID", userID),
 					zap.Int("total_accounts", len(scanners)))
+			}
+
+			// Add delay between user scans
+			if utils.ContextSleep(ctx, 1*time.Second) == utils.SleepCancelled {
+				w.logger.Info("Context cancelled during user delay, stopping mutual scanner")
+				return
 			}
 		}
 
@@ -140,4 +164,27 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// isTemporaryError determines if an error is temporary (rate limits, circuit breaker, etc.)
+func isTemporaryError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+
+	// Circuit breaker errors
+	if errors.Is(err, discord.ErrCircuitBreakerOpen) {
+		return true
+	}
+
+	// Rate limit errors
+	if strings.Contains(errStr, "rate limit exceeds") ||
+		strings.Contains(errStr, "rate: rate limit") ||
+		strings.Contains(errStr, "is blocked acquire options") {
+		return true
+	}
+
+	return false
 }

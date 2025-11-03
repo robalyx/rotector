@@ -21,7 +21,9 @@ func NewBaseClient(accountID, token, endpoint string) *BaseClient {
 		accountID: accountID,
 		token:     token,
 		endpoint:  endpoint,
-		client:    &http.Client{},
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
 }
 
