@@ -34,28 +34,6 @@ func NewFriendFetcher(db database.Client, roAPI *api.API, logger *zap.Logger) *F
 
 // GetFriendIDs returns the friend IDs for a user.
 func (f *FriendFetcher) GetFriendIDs(ctx context.Context, userID int64) ([]int64, error) {
-	// Get the friend count to determine which endpoint to use
-	friendCount, err := f.roAPI.Friends().GetFriendCount(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get friend count: %w", err)
-	}
-
-	// For users with ≤200 friends, use the legacy endpoint and extract IDs
-	if friendCount <= 200 {
-		friendsData, err := f.getFriendsLegacy(ctx, userID)
-		if err != nil {
-			return nil, err
-		}
-
-		friendIDs := make([]int64, 0, len(friendsData))
-		for _, friend := range friendsData {
-			friendIDs = append(friendIDs, friend.ID)
-		}
-
-		return friendIDs, nil
-	}
-
-	// For users with >200 friends, use pagination to collect IDs
 	var (
 		friendIDs []int64
 		cursor    string
@@ -94,41 +72,9 @@ func (f *FriendFetcher) GetFriendIDs(ctx context.Context, userID int64) ([]int64
 	return friendIDs, nil
 }
 
-// GetFriends returns a user's friends with full details using the best method.
+// GetFriends returns a user's friends with full details.
 func (f *FriendFetcher) GetFriends(ctx context.Context, userID int64) ([]*apiTypes.ExtendedFriend, error) {
-	// Get the friend count to determine which endpoint to use
-	friendCount, err := f.roAPI.Friends().GetFriendCount(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get friend count: %w", err)
-	}
-
-	// For users with ≤200 friends, try the legacy endpoint
-	if friendCount <= 200 {
-		friends, err := f.getFriendsLegacy(ctx, userID)
-		if err != nil {
-			return nil, err
-		}
-
-		// Check if legacy endpoint returned invalid data
-		hasEmptyNames := false
-
-		for _, friend := range friends {
-			if friend.ID != -1 && friend.Name == "" {
-				hasEmptyNames = true
-				break
-			}
-		}
-
-		// Return data if valid
-		if !hasEmptyNames {
-			return friends, nil
-		}
-
-		f.logger.Warn("Legacy endpoint returned invalid data, falling back to pagination",
-			zap.Int64("userID", userID))
-	}
-
-	// For users with >200 friends or invalid legacy data, get IDs then fetch details
+	// Get friend IDs via pagination
 	friendIDs, err := f.GetFriendIDs(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -223,39 +169,10 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID int64) ([]*apiTyp
 		}
 	}
 
-	f.logger.Debug("Finished fetching friends using pagination",
+	f.logger.Debug("Finished fetching friends",
 		zap.Int64("userID", userID),
 		zap.Int("totalFriends", len(friendIDs)),
 		zap.Int("successfulFetches", len(result)))
 
 	return result, nil
-}
-
-// getFriendsLegacy returns a user's friends with full details using the legacy endpoint.
-func (f *FriendFetcher) getFriendsLegacy(ctx context.Context, userID int64) ([]*apiTypes.ExtendedFriend, error) {
-	response, err := f.roAPI.Friends().GetFriends(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get friends: %w", err)
-	}
-
-	normalizer := utils.NewTextNormalizer()
-	friendsData := make([]*apiTypes.ExtendedFriend, 0, len(response.Data))
-
-	for _, friend := range response.Data {
-		if friend.ID != -1 {
-			friendsData = append(friendsData, &apiTypes.ExtendedFriend{
-				Friend: apiTypes.Friend{
-					ID: friend.ID,
-				},
-				Name:        normalizer.Normalize(friend.Name),
-				DisplayName: normalizer.Normalize(friend.DisplayName),
-			})
-		}
-	}
-
-	f.logger.Debug("Finished fetching friends using legacy endpoint",
-		zap.Int64("userID", userID),
-		zap.Int("totalFriends", len(friendsData)))
-
-	return friendsData, nil
 }
