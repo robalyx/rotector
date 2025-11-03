@@ -204,6 +204,10 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_discord_user_full_scans_last_scan
 			ON discord_user_full_scans (last_scan ASC);
 
+			-- Discord Roblox connection indexes
+			CREATE INDEX IF NOT EXISTS idx_discord_roblox_connections_discord_user
+			ON discord_roblox_connections (discord_user_id);
+
 			-- Comments indexes
 			CREATE INDEX IF NOT EXISTS idx_user_comments_target_created
 			ON user_comments (target_id, created_at DESC);
@@ -376,6 +380,9 @@ func init() { //nolint:funlen
 
 			-- Discord user full scan indexes
 			DROP INDEX IF EXISTS idx_discord_user_full_scans_last_scan;
+
+			-- Discord Roblox connection indexes
+			DROP INDEX IF EXISTS idx_discord_roblox_connections_discord_user;
 
 			-- Comments indexes
 			DROP INDEX IF EXISTS idx_user_comments_target_created;
