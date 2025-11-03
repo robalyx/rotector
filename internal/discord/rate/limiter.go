@@ -1,4 +1,4 @@
-package sync
+package rate
 
 import (
 	"context"
@@ -7,9 +7,8 @@ import (
 	"time"
 )
 
-// requestRateLimiter enforces delays between Discord API requests with random jitter
-// to avoid detection patterns.
-type requestRateLimiter struct {
+// Limiter enforces delays between Discord API requests with random jitter.
+type Limiter struct {
 	mu          sync.Mutex
 	lastRequest time.Time
 	minInterval time.Duration
@@ -17,10 +16,10 @@ type requestRateLimiter struct {
 	rng         *rand.Rand
 }
 
-// newRequestRateLimiter creates a rate limiter with base interval and jitter.
+// New creates a rate limiter with base interval and jitter.
 // For example, baseInterval=1s and jitter=200ms will result in delays between 800ms-1200ms.
-func newRequestRateLimiter(baseInterval, jitter time.Duration) *requestRateLimiter {
-	return &requestRateLimiter{
+func New(baseInterval, jitter time.Duration) *Limiter {
+	return &Limiter{
 		lastRequest: time.Now().Add(-baseInterval),
 		minInterval: baseInterval,
 		maxJitter:   jitter,
@@ -28,9 +27,8 @@ func newRequestRateLimiter(baseInterval, jitter time.Duration) *requestRateLimit
 	}
 }
 
-// waitForNextSlot blocks until enough time has passed since the last request.
-// Returns an error if the context is cancelled.
-func (r *requestRateLimiter) waitForNextSlot(ctx context.Context) error {
+// WaitForNextSlot blocks until enough time has passed since the last request.
+func (r *Limiter) WaitForNextSlot(ctx context.Context) error {
 	r.mu.Lock()
 	elapsed := time.Since(r.lastRequest)
 	jitterOffset := time.Duration(r.rng.Int63n(int64(r.maxJitter*2))) - r.maxJitter

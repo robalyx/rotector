@@ -14,12 +14,14 @@ import (
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/discord/memberstate"
+	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
 
 const (
-	maxChannelAttempts           = 15
+	maxChannelAttempts           = 5
 	maxConsecutiveNoProgressIter = 3
+	maxConsecutiveListNotFound   = 3
 	syncTimeout                  = 5 * time.Minute
 )
 
@@ -274,6 +276,11 @@ func (w *Worker) syncAccountServers(
 
 		progress.processedGuilds.Add(1)
 		progress.successfulGuilds.Add(1)
+
+		// Add delay between guilds
+		if utils.ContextSleep(ctx, 1500*time.Millisecond) == utils.SleepCancelled {
+			return totalMembers, successfulGuilds, failedGuilds, totalGuilds, ctx.Err()
+		}
 	}
 
 	return totalMembers, successfulGuilds, failedGuilds, totalGuilds, nil
@@ -309,15 +316,21 @@ func (w *Worker) syncServerMembersForAccount(
 			zap.Int("max_attempts", maxChannelAttempts))
 
 		if attempt > 0 {
-			thinkingDelay := w.getRandomDelay(2*time.Second, 5*time.Second)
+			thinkingDelay := 3 * time.Second
 			w.logger.Debug("Waiting before trying new channel",
 				zap.Int("account_index", accountIndex),
 				zap.Duration("delay", thinkingDelay))
 			time.Sleep(thinkingDelay)
 		}
 
+		// Wait for rate limit slot
+		if err := w.discordRateLimiter.WaitForNextSlot(ctx); err != nil {
+			return nil, err
+		}
+
 		ms.RequestMemberList(ctx, guildID, targetChannel, 0)
 
+		// Wait for member list response
 		time.Sleep(1 * time.Second)
 
 		members, err := w.syncMemberChunksForAccount(ctx, accountIndex, guildID, targetChannel, ms, now)
@@ -338,7 +351,7 @@ func (w *Worker) syncServerMembersForAccount(
 			zap.Int("attempt", attempt+1))
 
 		if attempt < maxChannelAttempts-1 {
-			channelSwitchDelay := w.getRandomDelay(5*time.Second, 10*time.Second)
+			channelSwitchDelay := 7 * time.Second
 			w.logger.Debug("Waiting before trying next channel",
 				zap.Int("account_index", accountIndex),
 				zap.Duration("delay", channelSwitchDelay))
@@ -506,7 +519,6 @@ func (w *Worker) syncMemberChunksForAccount(
 	consecutiveNoProgress := 0
 
 	consecutiveListNotFound := 0
-	maxConsecutiveListNotFound := w.getRandomRetryCount()
 
 	w.logger.Debug("Starting member chunk sync",
 		zap.Int("account_index", accountIndex),
@@ -530,7 +542,7 @@ func (w *Worker) syncMemberChunksForAccount(
 			if err != nil {
 				if errors.Is(err, memberstate.ErrListNotFound) {
 					shouldContinue, handleErr := w.handleMemberListNotFoundForAccount(
-						ctx, accountIndex, guildID, channelID, ms, &consecutiveListNotFound, maxConsecutiveListNotFound)
+						ctx, accountIndex, guildID, channelID, ms, &consecutiveListNotFound)
 					if !shouldContinue {
 						return allMembers, handleErr
 					}
@@ -592,7 +604,10 @@ func (w *Worker) syncMemberChunksForAccount(
 
 			membersMutex.Unlock()
 
-			time.Sleep(50 * time.Millisecond)
+			// Add delay between chunk requests
+			if utils.ContextSleep(ctx, 300*time.Millisecond) == utils.SleepCancelled {
+				return allMembers, ctx.Err()
+			}
 
 			if consecutiveNoProgress >= maxConsecutiveNoProgressIter {
 				wg.Wait()
@@ -635,23 +650,12 @@ func (w *Worker) syncMemberChunksForAccount(
 			if currentMaxChunk >= 0 && list.TotalVisible() > 100 && list.TotalVisible() > currentMemberCount {
 				nextChunk := currentMaxChunk + 1
 
-				// Wait for rate limit before making request
-				if accountIndex >= len(w.discordRateLimiters) {
-					return allMembers, fmt.Errorf("%w: %d", ErrRateLimiterNotFound, accountIndex)
-				}
-
-				if err := w.discordRateLimiters[accountIndex].waitForNextSlot(ctx); err != nil {
-					w.logger.Debug("Context cancelled during rate limit wait",
-						zap.Int("account_index", accountIndex),
-						zap.String("guildID", guildID.String()))
-
-					return allMembers, ctx.Err()
+				// Wait for rate limit slot
+				if err := w.discordRateLimiter.WaitForNextSlot(ctx); err != nil {
+					return allMembers, err
 				}
 
 				ms.RequestMemberList(ctx, guildID, channelID, nextChunk)
-			} else {
-				// Wait before checking status again to prevent tight loop
-				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}
@@ -662,7 +666,7 @@ func (w *Worker) syncMemberChunksForAccount(
 // Returns true to continue the loop, or false with an error to exit.
 func (w *Worker) handleMemberListNotFoundForAccount(
 	ctx context.Context, accountIndex int, guildID discord.GuildID, channelID discord.ChannelID,
-	ms *memberstate.State, consecutiveListNotFound *int, maxConsecutiveListNotFound int,
+	ms *memberstate.State, consecutiveListNotFound *int,
 ) (bool, error) {
 	*consecutiveListNotFound++
 	w.logger.Debug("Member list not found, will retry",
@@ -681,17 +685,20 @@ func (w *Worker) handleMemberListNotFoundForAccount(
 		return false, ErrListNotFoundRetry
 	}
 
-	// Wait for rate limit before making request
-	if accountIndex >= len(w.discordRateLimiters) {
-		return false, fmt.Errorf("%w: %d", ErrRateLimiterNotFound, accountIndex)
+	// Apply exponential backoff delay
+	backoffSeconds := min(1<<(*consecutiveListNotFound-1), 30)
+	backoffDuration := time.Duration(backoffSeconds) * time.Second
+
+	select {
+	case <-time.After(backoffDuration):
+		// Continue with retry
+	case <-ctx.Done():
+		return false, ctx.Err()
 	}
 
-	if err := w.discordRateLimiters[accountIndex].waitForNextSlot(ctx); err != nil {
-		w.logger.Debug("Context cancelled during rate limit wait",
-			zap.Int("account_index", accountIndex),
-			zap.String("guildID", guildID.String()))
-
-		return false, ctx.Err()
+	// Wait for rate limit slot
+	if err := w.discordRateLimiter.WaitForNextSlot(ctx); err != nil {
+		return false, err
 	}
 
 	// Try again with a new request
@@ -806,20 +813,4 @@ func (w *Worker) filterAndCheckMembers(
 	}
 
 	return newMembers
-}
-
-// getRandomRetryCount returns a random retry count between 2 and 4.
-func (w *Worker) getRandomRetryCount() int {
-	return w.rng.Intn(3) + 2
-}
-
-// getRandomDelay returns a random delay between minDelay and maxDelay duration.
-func (w *Worker) getRandomDelay(minDelay, maxDelay time.Duration) time.Duration {
-	if maxDelay <= minDelay {
-		return minDelay
-	}
-
-	delta := maxDelay - minDelay
-
-	return minDelay + time.Duration(w.rng.Int63n(int64(delta)))
 }

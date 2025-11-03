@@ -16,6 +16,7 @@ import (
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/discord"
 	"github.com/robalyx/rotector/internal/discord/memberstate"
+	"github.com/robalyx/rotector/internal/discord/rate"
 	"github.com/robalyx/rotector/internal/discord/verification"
 	"github.com/robalyx/rotector/internal/redis"
 	"github.com/robalyx/rotector/internal/setup"
@@ -32,7 +33,6 @@ var (
 	ErrNoTextChannel        = errors.New("no text channel found in guild")
 	ErrAllChannelsAttempted = errors.New("all available channels have been attempted")
 	ErrListNotFoundRetry    = errors.New("member list not found after multiple attempts")
-	ErrRateLimiterNotFound  = errors.New("rate limiter not found for account")
 )
 
 // Worker handles syncing Discord server members.
@@ -50,7 +50,7 @@ type Worker struct {
 	messageAnalyzer     *ai.MessageAnalyzer
 	eventHandlers       []*events.Handler
 	ratelimit           rueidis.Client
-	discordRateLimiters []*requestRateLimiter
+	discordRateLimiter  *rate.Limiter
 	seenServers         map[uint64]int
 	seenServersMutex    sync.RWMutex
 	rng                 *rand.Rand
@@ -83,12 +83,14 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 	// Create status reporter
 	reporter := core.NewStatusReporter(app.StatusClient, "sync", instanceID, logger)
 
+	// Create shared rate limiter for all Discord API calls
+	discordRateLimiter := rate.New(800*time.Millisecond, 200*time.Millisecond)
+
 	// Initialize arrays for multi-account support
 	states := make([]*state.State, 0, len(app.Config.Common.Discord.SyncTokens))
 	memberStates := make([]*memberstate.State, 0, len(app.Config.Common.Discord.SyncTokens))
 	eventHandlers := make([]*events.Handler, 0, len(app.Config.Common.Discord.SyncTokens))
 	scanners := make([]*discord.Scanner, 0, len(app.Config.Common.Discord.SyncTokens))
-	discordRateLimiters := make([]*requestRateLimiter, 0, len(app.Config.Common.Discord.SyncTokens))
 
 	// Create necessary dependencies for each sync token
 	for i, token := range app.Config.Common.Discord.SyncTokens {
@@ -97,8 +99,8 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 			gateway.IntentGuilds|gateway.IntentGuildMembers|
 				gateway.IntentGuildMessages|gateway.IntentMessageContent)
 
-		// Disguise user agent
 		s.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
+		s.Timeout = 30 * time.Second
 
 		// Create member state with error handling
 		ms := memberstate.NewState(s, s)
@@ -112,16 +114,12 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 
 		// Create scanner for this account
 		scannerID := fmt.Sprintf("scanner_%d", i)
-		scanner := discord.NewScanner(app.DB, app.CFClient, ratelimit, s.Session, messageAnalyzer, scannerID, logger)
-
-		// Create rate limiter for this account
-		rateLimiter := newRequestRateLimiter(1*time.Second, 200*time.Millisecond)
+		scanner := discord.NewScanner(app.DB, app.RoAPI, app.CFClient, ratelimit, s, s.Session, messageAnalyzer, discordRateLimiter, scannerID, logger)
 
 		states = append(states, s)
 		memberStates = append(memberStates, ms)
 		eventHandlers = append(eventHandlers, eventHandler)
 		scanners = append(scanners, scanner)
-		discordRateLimiters = append(discordRateLimiters, rateLimiter)
 
 		syncLogger.Info("Initialized sync account", zap.Int("account_index", i))
 	}
@@ -140,7 +138,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		messageAnalyzer:     messageAnalyzer,
 		eventHandlers:       eventHandlers,
 		ratelimit:           ratelimit,
-		discordRateLimiters: discordRateLimiters,
+		discordRateLimiter:  discordRateLimiter,
 		seenServers:         make(map[uint64]int),
 		rng:                 rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
