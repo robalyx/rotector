@@ -24,6 +24,7 @@ type UserService struct {
 	model    *models.UserModel
 	activity *models.ActivityModel
 	tracking *models.TrackingModel
+	cache    *models.CacheModel
 	logger   *zap.Logger
 }
 
@@ -33,6 +34,7 @@ func NewUser(
 	model *models.UserModel,
 	activity *models.ActivityModel,
 	tracking *models.TrackingModel,
+	cache *models.CacheModel,
 	logger *zap.Logger,
 ) *UserService {
 	return &UserService{
@@ -40,6 +42,7 @@ func NewUser(
 		model:    model,
 		activity: activity,
 		tracking: tracking,
+		cache:    cache,
 		logger:   logger.Named("user_service"),
 	}
 }
@@ -688,6 +691,12 @@ func (s *UserService) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs 
 	}
 
 	var totalAffected int64
+
+	// Delete cache entries
+	if err := s.cache.DeleteUserCacheWithTx(ctx, tx, userIDs); err != nil {
+		s.logger.Error("Failed to delete user cache entries", zap.Error(err))
+		return 0, err
+	}
 
 	// Remove users from tracking
 	if err := s.tracking.RemoveUsersFromAllGroupsWithTx(ctx, tx, userIDs); err != nil {

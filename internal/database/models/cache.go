@@ -168,3 +168,33 @@ func (r *CacheModel) MarkUsersProcessed(ctx context.Context, entries []*types.Us
 
 	return nil
 }
+
+// DeleteUserCacheWithTx removes cache entries for the given users using the provided transaction.
+func (r *CacheModel) DeleteUserCacheWithTx(ctx context.Context, tx bun.Tx, userIDs []int64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	// Delete from user_processing_log
+	_, err := tx.NewDelete().
+		Model((*types.UserProcessingLog)(nil)).
+		Where("user_id IN (?)", bun.In(userIDs)).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete user processing logs: %w", err)
+	}
+
+	// Delete from user_friend_count
+	_, err = tx.NewDelete().
+		Model((*types.UserFriendCount)(nil)).
+		Where("user_id IN (?)", bun.In(userIDs)).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete user friend counts: %w", err)
+	}
+
+	r.logger.Debug("Deleted user cache entries",
+		zap.Int("userCount", len(userIDs)))
+
+	return nil
+}
