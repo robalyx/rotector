@@ -437,14 +437,38 @@ func (m *SyncModel) IsUserDataRedacted(ctx context.Context, userID uint64) (bool
 // GetUsersForFullScan returns users that haven't been scanned recently.
 func (m *SyncModel) GetUsersForFullScan(ctx context.Context, before time.Time, limit int) ([]uint64, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]uint64, error) {
+		sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour)
+
 		var scans []types.DiscordUserFullScan
 
-		err := m.db.NewSelect().
-			Model(&scans).
-			Where("last_scan < ?", before).
-			Order("last_scan ASC").
-			Limit(limit).
-			Scan(ctx)
+		err := m.db.NewRaw(`
+			WITH guild_counts AS (
+				SELECT user_id, COUNT(*) as guild_count
+				FROM discord_server_members
+				GROUP BY user_id
+			)
+			SELECT dufs.user_id
+			FROM discord_user_full_scans dufs
+			LEFT JOIN guild_counts gc ON gc.user_id = dufs.user_id
+			LEFT JOIN discord_roblox_connections drc ON drc.discord_user_id = dufs.user_id
+			WHERE
+				-- Priority 1: High-value users (3+ guilds, no connection) with 7-day window
+				(COALESCE(gc.guild_count, 0) >= 3
+					AND drc.discord_user_id IS NULL
+					AND dufs.last_scan < ?)
+				OR
+				-- Priority 2: Everyone else with 12-hour window
+				(NOT (COALESCE(gc.guild_count, 0) >= 3 AND drc.discord_user_id IS NULL)
+					AND dufs.last_scan < ?)
+			ORDER BY
+				-- Process Priority 1 users first
+				CASE
+					WHEN COALESCE(gc.guild_count, 0) >= 3 AND drc.discord_user_id IS NULL THEN 1
+					ELSE 2
+				END,
+				dufs.last_scan ASC
+			LIMIT ?
+		`, sevenDaysAgo, before, limit).Scan(ctx, &scans)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get users for full scan: %w", err)
 		}
