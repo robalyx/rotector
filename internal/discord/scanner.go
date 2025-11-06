@@ -134,7 +134,7 @@ func (s *Scanner) PerformFullScan(ctx context.Context, userID uint64, updateScan
 
 	// Execute API call
 	userExists, err := s.breaker.Execute(func() (any, error) {
-		err := s.session.RequestJSON(&profile, "GET", endpoint)
+		err := s.session.WithContext(ctx).RequestJSON(&profile, "GET", endpoint)
 		if err != nil {
 			// Treat as a successful API call (user just doesn't exist)
 			if strings.Contains(err.Error(), "Unknown User") {
@@ -251,7 +251,7 @@ func (s *Scanner) FetchUserMessages(ctx context.Context, guildID, userID uint64)
 
 	// Fetch messages
 	_, err := s.breaker.Execute(func() (any, error) {
-		err := s.session.RequestJSON(&response, "GET", endpoint)
+		err := s.session.WithContext(ctx).RequestJSON(&response, "GET", endpoint)
 		if err != nil {
 			// Treat as a successful API call (guild no longer exists)
 			if strings.Contains(err.Error(), "Unknown Guild") {

@@ -17,7 +17,7 @@ var (
 
 const (
 	// CurrentEngineVersion represents the current AI engine version for user processing.
-	CurrentEngineVersion = "2.25"
+	CurrentEngineVersion = "2.27"
 )
 
 // User represents a user in any state (flagged, confirmed, or cleared).
@@ -246,6 +246,14 @@ type GlobalTargetCandidate struct {
 	Status     enum.UserType         `bun:"status"`
 	Confidence float64               `bun:"confidence"`
 	Category   enum.UserCategoryType `bun:"category"`
+}
+
+// NetworkStats represents statistics about a user's network for filtering.
+type NetworkStats struct {
+	TotalFriends        int  // Total number of friends
+	FlaggedFriends      int  // Number of flagged or confirmed friends
+	ConfirmedFriends    int  // Number of confirmed friends only
+	HasConfirmedOrMixed bool // Whether user has any confirmed or mixed groups
 }
 
 // UserField represents available fields as bit flags.

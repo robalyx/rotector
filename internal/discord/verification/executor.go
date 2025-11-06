@@ -1,14 +1,17 @@
 package verification
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/session"
+	discordClient "github.com/robalyx/rotector/internal/discord/client"
 	"github.com/sony/gobreaker"
 	"go.uber.org/zap"
 )
@@ -39,7 +42,7 @@ type BaseExecutor struct {
 }
 
 // NewBaseExecutor creates a new base executor.
-func NewBaseExecutor(config Config, logger *zap.Logger) *BaseExecutor {
+func NewBaseExecutor(config Config, proxy *url.URL, logger *zap.Logger) *BaseExecutor {
 	serviceLogger := logger.Named(config.ServiceName)
 
 	// Create circuit breaker for verification service API calls
@@ -60,8 +63,7 @@ func NewBaseExecutor(config Config, logger *zap.Logger) *BaseExecutor {
 	})
 
 	// Create Discord session
-	sess := session.New(config.Token)
-	sess.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
+	sess := discordClient.NewSessionWithProxy(config.Token, proxy)
 
 	return &BaseExecutor{
 		session:         sess,
@@ -102,7 +104,7 @@ func (e *BaseExecutor) findVerificationResponse(messageID string) (*Response, er
 		e.channelID)
 
 	var messages []map[string]any
-	if err := e.session.RequestJSON(&messages, "GET", endpoint); err != nil {
+	if err := e.session.WithContext(context.Background()).RequestJSON(&messages, "GET", endpoint); err != nil {
 		return nil, fmt.Errorf("failed to fetch channel messages: %w", err)
 	}
 
@@ -246,7 +248,7 @@ func (e *BaseExecutor) handleMessage(msg discord.Message) {
 }
 
 // discoverCommand fetches and caches the command information.
-func (e *BaseExecutor) discoverCommand() (map[string]any, error) {
+func (e *BaseExecutor) discoverCommand(ctx context.Context) (map[string]any, error) {
 	e.commandMu.RLock()
 
 	if e.commandInfo != nil {
@@ -272,7 +274,7 @@ func (e *BaseExecutor) discoverCommand() (map[string]any, error) {
 	var response CommandIndexResponse
 
 	_, err := e.breaker.Execute(func() (any, error) {
-		return nil, e.session.RequestJSON(&response, "GET", endpoint)
+		return nil, e.session.WithContext(ctx).RequestJSON(&response, "GET", endpoint)
 	})
 	if err != nil {
 		// Check for circuit breaker open state

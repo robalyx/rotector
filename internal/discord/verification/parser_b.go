@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
+	discordClient "github.com/robalyx/rotector/internal/discord/client"
 	"github.com/sony/gobreaker"
 	"go.uber.org/zap"
 )
@@ -23,15 +25,15 @@ type ServiceB struct {
 }
 
 // NewServiceB creates a new Service B implementation.
-func NewServiceB(config Config, logger *zap.Logger) (*ServiceB, error) {
-	executor := NewBaseExecutor(config, logger)
+func NewServiceB(config Config, proxy *url.URL, logger *zap.Logger) (*ServiceB, error) {
+	executor := NewBaseExecutor(config, proxy, logger)
 
-	// Create Discord state with required intents
-	s := state.NewWithIntents(
+	// Create Discord state
+	s := discordClient.NewStateWithProxy(
 		config.Token,
+		proxy,
 		gateway.IntentGuilds|gateway.IntentGuildMessages,
 	)
-	s.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
 
 	service := &ServiceB{
 		executor: executor,
@@ -58,7 +60,7 @@ func (s *ServiceB) Start(ctx context.Context) error {
 // ExecuteCommand executes the verification command for a Discord user.
 func (s *ServiceB) ExecuteCommand(ctx context.Context, discordUserID uint64) (*Response, error) {
 	// Discover command info if not cached
-	cmdInfo, err := s.executor.discoverCommand()
+	cmdInfo, err := s.executor.discoverCommand(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +123,7 @@ func (s *ServiceB) ExecuteCommand(ctx context.Context, discordUserID uint64) (*R
 
 	// Execute the interaction
 	_, err = s.executor.breaker.Execute(func() (any, error) {
-		resp, execErr := s.executor.session.Request(
+		resp, execErr := s.executor.session.WithContext(ctx).Request(
 			"POST",
 			"https://discord.com/api/v9/interactions",
 			httputil.WithJSONBody(payload),

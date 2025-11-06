@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
@@ -20,7 +21,9 @@ type ServiceManager struct {
 }
 
 // NewServiceManager initializes verification services based on configuration.
-func NewServiceManager(discordConfig config.DiscordConfig, logger *zap.Logger) (*ServiceManager, error) {
+func NewServiceManager(
+	discordConfig config.DiscordConfig, proxyA, proxyB *url.URL, logger *zap.Logger,
+) (*ServiceManager, error) {
 	var services []Service
 
 	// Initialize primary verification service
@@ -31,14 +34,15 @@ func NewServiceManager(discordConfig config.DiscordConfig, logger *zap.Logger) (
 			ChannelID:   discordConfig.VerificationServiceA.ChannelID,
 			CommandName: discordConfig.VerificationServiceA.CommandName,
 			ServiceName: "verification_service_a",
-		}, logger)
+		}, proxyA, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create verification service A: %w", err)
 		}
 
 		services = append(services, serviceA)
 
-		logger.Info("Initialized verification service A")
+		logger.Info("Initialized verification service A",
+			zap.String("proxy_host", proxyA.Host))
 	}
 
 	// Initialize secondary verification service
@@ -49,14 +53,15 @@ func NewServiceManager(discordConfig config.DiscordConfig, logger *zap.Logger) (
 			ChannelID:   discordConfig.VerificationServiceB.ChannelID,
 			CommandName: discordConfig.VerificationServiceB.CommandName,
 			ServiceName: "verification_service_b",
-		}, logger)
+		}, proxyB, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create verification service B: %w", err)
 		}
 
 		services = append(services, serviceB)
 
-		logger.Info("Initialized verification service B")
+		logger.Info("Initialized verification service B",
+			zap.String("proxy_host", proxyB.Host))
 	}
 
 	return &ServiceManager{
