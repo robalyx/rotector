@@ -33,12 +33,10 @@ type App struct {
 	CFClient     *cloudflare.Client  // Cloudflare D1 client for cloudflare operations
 	LogManager   *telemetry.Manager  // Log management system
 	pprofServer  *pprofServer        // Debug HTTP server for pprof
-	middlewares  *client.Middlewares // HTTP client middleware instances
+	Middlewares  *client.Middlewares // HTTP client middleware instances
 }
 
-// InitializeApp bootstraps all application dependencies in the correct order,
-// ensuring each component has its required dependencies available.
-// Workers can provide type and ID information for service identification.
+// InitializeApp bootstraps all application dependencies.
 func InitializeApp(ctx context.Context, serviceType telemetry.ServiceType, logDir string, workerInfo ...string) (*App, error) {
 	// Load app configuration
 	cfg, configDir, err := config.LoadConfig()
@@ -131,7 +129,7 @@ func InitializeApp(ctx context.Context, serviceType telemetry.ServiceType, logDi
 		CFClient:     cfClient,
 		LogManager:   logManager,
 		pprofServer:  pprofSrv,
-		middlewares:  middlewares,
+		Middlewares:  middlewares,
 	}, nil
 }
 
@@ -165,8 +163,8 @@ func (s *App) Cleanup(ctx context.Context) {
 	}
 
 	// Cleanup proxy and roverse middlewares
-	s.middlewares.Proxy.Cleanup()
-	s.middlewares.Roverse.Cleanup()
+	s.Middlewares.Proxy.Cleanup()
+	s.Middlewares.Roverse.Cleanup()
 
 	// Close Redis connections last as other components might need it during cleanup
 	s.RedisManager.Close()

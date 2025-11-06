@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +38,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types/enum"
+	discordClient "github.com/robalyx/rotector/internal/discord/client"
 	"github.com/robalyx/rotector/internal/discord/verification"
 	"github.com/robalyx/rotector/internal/setup"
 	"go.uber.org/zap"
@@ -66,8 +68,22 @@ func New(app *setup.App) (*Bot, error) {
 	interactionManager := interaction.NewManager(sessionManager, logger)
 	guildEventHandler := eventHandler.NewGuildEventHandler(logger)
 
+	// Get proxy list
+	proxies := app.Middlewares.Proxy.GetProxies()
+
+	// Select proxies for verification services
+	var proxyA, proxyB *url.URL
+	if app.Config.Common.Discord.VerificationServiceA.Token != "" && len(proxies) > 0 {
+		proxyA, _ = discordClient.SelectProxyForToken(app.Config.Common.Discord.VerificationServiceA.Token, proxies)
+	}
+
+	if app.Config.Common.Discord.VerificationServiceB.Token != "" && len(proxies) > 0 {
+		proxyB, _ = discordClient.SelectProxyForToken(app.Config.Common.Discord.VerificationServiceB.Token, proxies)
+	}
+
 	// Create verification service manager
-	verificationManager, err := verification.NewServiceManager(app.Config.Common.Discord, logger)
+	verificationManager, err := verification.NewServiceManager(
+		app.Config.Common.Discord, proxyA, proxyB, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create verification services: %w", err)
 	}

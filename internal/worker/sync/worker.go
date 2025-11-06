@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/url"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/discord"
+	discordClient "github.com/robalyx/rotector/internal/discord/client"
 	"github.com/robalyx/rotector/internal/discord/memberstate"
 	"github.com/robalyx/rotector/internal/discord/rate"
 	"github.com/robalyx/rotector/internal/discord/verification"
@@ -71,8 +73,22 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		logger.Fatal("Failed to get Redis client for proxy rotation", zap.Error(err))
 	}
 
+	// Get proxy list
+	proxies := app.Middlewares.Proxy.GetProxies()
+
+	// Select proxies for verification services
+	var proxyA, proxyB *url.URL
+	if app.Config.Common.Discord.VerificationServiceA.Token != "" {
+		proxyA, _ = discordClient.SelectProxyForToken(app.Config.Common.Discord.VerificationServiceA.Token, proxies)
+	}
+
+	if app.Config.Common.Discord.VerificationServiceB.Token != "" {
+		proxyB, _ = discordClient.SelectProxyForToken(app.Config.Common.Discord.VerificationServiceB.Token, proxies)
+	}
+
 	// Create verification service manager
-	verificationManager, err := verification.NewServiceManager(app.Config.Common.Discord, logger)
+	verificationManager, err := verification.NewServiceManager(
+		app.Config.Common.Discord, proxyA, proxyB, logger)
 	if err != nil {
 		logger.Fatal("Failed to create verification services", zap.Error(err))
 	}
@@ -94,13 +110,13 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 
 	// Create necessary dependencies for each sync token
 	for i, token := range app.Config.Common.Discord.SyncTokens {
-		// Create Discord state with sync token and required intents
-		s := state.NewWithIntents(token,
+		// Select proxy for this account
+		proxy, proxyIndex := discordClient.SelectProxyForToken(token, proxies)
+
+		// Create Discord state
+		s := discordClient.NewStateWithProxy(token, proxy,
 			gateway.IntentGuilds|gateway.IntentGuildMembers|
 				gateway.IntentGuildMessages|gateway.IntentMessageContent)
-
-		s.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
-		s.Timeout = 30 * time.Second
 
 		// Create member state with error handling
 		ms := memberstate.NewState(s, s)
@@ -121,7 +137,10 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		eventHandlers = append(eventHandlers, eventHandler)
 		scanners = append(scanners, scanner)
 
-		syncLogger.Info("Initialized sync account", zap.Int("account_index", i))
+		syncLogger.Info("Initialized sync account",
+			zap.Int("account_index", i),
+			zap.Int("proxy_index", proxyIndex),
+			zap.String("proxy_host", proxy.Host))
 	}
 
 	return &Worker{
