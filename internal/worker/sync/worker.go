@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"net/url"
 	"sync"
 	"time"
 
@@ -43,6 +42,7 @@ type Worker struct {
 	roAPI               *api.API
 	states              []*state.State
 	memberStates        []*memberstate.State
+	rateLimiters        []*rate.Limiter
 	scannerPool         *discord.ScannerPool
 	verificationManager *verification.ServiceManager
 	bar                 *components.ProgressBar
@@ -52,7 +52,6 @@ type Worker struct {
 	messageAnalyzer     *ai.MessageAnalyzer
 	eventHandlers       []*events.Handler
 	ratelimit           rueidis.Client
-	discordRateLimiter  *rate.Limiter
 	seenServers         map[uint64]int
 	seenServersMutex    sync.RWMutex
 	rng                 *rand.Rand
@@ -73,22 +72,20 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		logger.Fatal("Failed to get Redis client for proxy rotation", zap.Error(err))
 	}
 
-	// Get proxy list
-	proxies := app.Middlewares.Proxy.GetProxies()
-
-	// Select proxies for verification services
-	var proxyA, proxyB *url.URL
-	if app.Config.Common.Discord.VerificationServiceA.Token != "" {
-		proxyA, _ = discordClient.SelectProxyForToken(app.Config.Common.Discord.VerificationServiceA.Token, proxies)
-	}
-
-	if app.Config.Common.Discord.VerificationServiceB.Token != "" {
-		proxyB, _ = discordClient.SelectProxyForToken(app.Config.Common.Discord.VerificationServiceB.Token, proxies)
+	// Assign unique proxies to all tokens
+	proxyAssignments, proxyIndices, err := discordClient.AssignProxiesToDiscordTokens(
+		app.Config.Common.Discord.SyncTokens,
+		app.Config.Common.Discord.VerificationServiceA.Tokens,
+		app.Config.Common.Discord.VerificationServiceB.Tokens,
+		app.Middlewares.Proxy.GetProxies(),
+	)
+	if err != nil {
+		logger.Fatal("Failed to assign proxies", zap.Error(err))
 	}
 
 	// Create verification service manager
 	verificationManager, err := verification.NewServiceManager(
-		app.Config.Common.Discord, proxyA, proxyB, logger)
+		app.Config.Common.Discord, proxyAssignments, proxyIndices, logger)
 	if err != nil {
 		logger.Fatal("Failed to create verification services", zap.Error(err))
 	}
@@ -99,19 +96,18 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 	// Create status reporter
 	reporter := core.NewStatusReporter(app.StatusClient, "sync", instanceID, logger)
 
-	// Create shared rate limiter for all Discord API calls
-	discordRateLimiter := rate.New(800*time.Millisecond, 200*time.Millisecond)
-
 	// Initialize arrays for multi-account support
 	states := make([]*state.State, 0, len(app.Config.Common.Discord.SyncTokens))
 	memberStates := make([]*memberstate.State, 0, len(app.Config.Common.Discord.SyncTokens))
+	rateLimiters := make([]*rate.Limiter, 0, len(app.Config.Common.Discord.SyncTokens))
 	eventHandlers := make([]*events.Handler, 0, len(app.Config.Common.Discord.SyncTokens))
 	scanners := make([]*discord.Scanner, 0, len(app.Config.Common.Discord.SyncTokens))
 
 	// Create necessary dependencies for each sync token
 	for i, token := range app.Config.Common.Discord.SyncTokens {
-		// Select proxy for this account
-		proxy, proxyIndex := discordClient.SelectProxyForToken(token, proxies)
+		// Get assigned proxy for this account
+		proxy := proxyAssignments[token]
+		proxyIndex := proxyIndices[token]
 
 		// Create Discord state
 		s := discordClient.NewStateWithProxy(token, proxy,
@@ -128,12 +124,16 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		eventHandler := events.New(app, s, ms, messageAnalyzer, logger)
 		eventHandler.Setup()
 
+		// Create rate limiter
+		rateLimiter := rate.New(1200*time.Millisecond, 200*time.Millisecond)
+
 		// Create scanner for this account
 		scannerID := fmt.Sprintf("scanner_%d", i)
-		scanner := discord.NewScanner(app.DB, app.RoAPI, app.CFClient, ratelimit, s, s.Session, messageAnalyzer, discordRateLimiter, scannerID, logger)
+		scanner := discord.NewScanner(app.DB, app.RoAPI, app.CFClient, ratelimit, s, s.Session, messageAnalyzer, rateLimiter, scannerID, logger)
 
 		states = append(states, s)
 		memberStates = append(memberStates, ms)
+		rateLimiters = append(rateLimiters, rateLimiter)
 		eventHandlers = append(eventHandlers, eventHandler)
 		scanners = append(scanners, scanner)
 
@@ -148,6 +148,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		roAPI:               app.RoAPI,
 		states:              states,
 		memberStates:        memberStates,
+		rateLimiters:        rateLimiters,
 		scannerPool:         discord.NewScannerPool(scanners, app.DB, syncLogger),
 		verificationManager: verificationManager,
 		bar:                 bar,
@@ -157,7 +158,6 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		messageAnalyzer:     messageAnalyzer,
 		eventHandlers:       eventHandlers,
 		ratelimit:           ratelimit,
-		discordRateLimiter:  discordRateLimiter,
 		seenServers:         make(map[uint64]int),
 		rng:                 rand.New(rand.NewSource(time.Now().UnixNano())),
 	}

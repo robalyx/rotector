@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -68,22 +67,20 @@ func New(app *setup.App) (*Bot, error) {
 	interactionManager := interaction.NewManager(sessionManager, logger)
 	guildEventHandler := eventHandler.NewGuildEventHandler(logger)
 
-	// Get proxy list
-	proxies := app.Middlewares.Proxy.GetProxies()
-
-	// Select proxies for verification services
-	var proxyA, proxyB *url.URL
-	if app.Config.Common.Discord.VerificationServiceA.Token != "" && len(proxies) > 0 {
-		proxyA, _ = discordClient.SelectProxyForToken(app.Config.Common.Discord.VerificationServiceA.Token, proxies)
-	}
-
-	if app.Config.Common.Discord.VerificationServiceB.Token != "" && len(proxies) > 0 {
-		proxyB, _ = discordClient.SelectProxyForToken(app.Config.Common.Discord.VerificationServiceB.Token, proxies)
+	// Assign proxies to all Discord tokens
+	proxyAssignments, proxyIndices, err := discordClient.AssignProxiesToDiscordTokens(
+		app.Config.Common.Discord.SyncTokens,
+		app.Config.Common.Discord.VerificationServiceA.Tokens,
+		app.Config.Common.Discord.VerificationServiceB.Tokens,
+		app.Middlewares.Proxy.GetProxies(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to assign proxies: %w", err)
 	}
 
 	// Create verification service manager
 	verificationManager, err := verification.NewServiceManager(
-		app.Config.Common.Discord, proxyA, proxyB, logger)
+		app.Config.Common.Discord, proxyAssignments, proxyIndices, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create verification services: %w", err)
 	}

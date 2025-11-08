@@ -14,68 +14,130 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+var (
+	ErrNoProxyAssigned      = errors.New("no proxy assigned for verification service token")
+	ErrMismatchedTokenCount = errors.New("mismatched token counts between Service A and B")
+)
+
+// TokenPair represents a pair of Service A and Service B tokens that work together.
+type TokenPair struct {
+	ServiceA Service
+	ServiceB Service
+}
+
 // ServiceManager manages verification service lifecycle and provides access to services.
 type ServiceManager struct {
-	services []Service
-	logger   *zap.Logger
+	pairs  []TokenPair
+	logger *zap.Logger
 }
 
 // NewServiceManager initializes verification services based on configuration.
 func NewServiceManager(
-	discordConfig config.DiscordConfig, proxyA, proxyB *url.URL, logger *zap.Logger,
+	discordConfig config.DiscordConfig, proxyAssignments map[string]*url.URL,
+	proxyIndices map[string]int, logger *zap.Logger,
 ) (*ServiceManager, error) {
-	var services []Service
+	servicesA := make([]Service, 0, len(discordConfig.VerificationServiceA.Tokens))
+	servicesB := make([]Service, 0, len(discordConfig.VerificationServiceB.Tokens))
 
-	// Initialize primary verification service
-	if discordConfig.VerificationServiceA.Token != "" {
-		serviceA, err := NewServiceA(Config{
-			Token:       discordConfig.VerificationServiceA.Token,
-			GuildID:     discordConfig.VerificationServiceA.GuildID,
-			ChannelID:   discordConfig.VerificationServiceA.ChannelID,
-			CommandName: discordConfig.VerificationServiceA.CommandName,
-			ServiceName: "verification_service_a",
-		}, proxyA, logger)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create verification service A: %w", err)
+	// Initialize Service A tokens
+	for i, tokenConfig := range discordConfig.VerificationServiceA.Tokens {
+		proxy, ok := proxyAssignments[tokenConfig.Token]
+		if !ok {
+			return nil, fmt.Errorf("%w A token %d", ErrNoProxyAssigned, i)
 		}
 
-		services = append(services, serviceA)
+		serviceName := fmt.Sprintf("verification_service_a_%d", i)
 
-		logger.Info("Initialized verification service A",
-			zap.String("proxy_host", proxyA.Host))
+		serviceA, err := NewServiceA(Config{
+			Token:       tokenConfig.Token,
+			GuildID:     tokenConfig.GuildID,
+			ChannelID:   tokenConfig.ChannelID,
+			CommandName: discordConfig.VerificationServiceA.CommandName,
+			ServiceName: serviceName,
+		}, proxy, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create verification service A token %d: %w", i, err)
+		}
+
+		servicesA = append(servicesA, serviceA)
+
+		logger.Info("Initialized verification service A token",
+			zap.Int("token_index", i),
+			zap.Int("proxy_index", proxyIndices[tokenConfig.Token]),
+			zap.String("proxy_host", proxy.Host),
+			zap.Uint64("guild_id", tokenConfig.GuildID),
+			zap.Uint64("channel_id", tokenConfig.ChannelID))
 	}
 
-	// Initialize secondary verification service
-	if discordConfig.VerificationServiceB.Token != "" {
-		serviceB, err := NewServiceB(Config{
-			Token:       discordConfig.VerificationServiceB.Token,
-			GuildID:     discordConfig.VerificationServiceB.GuildID,
-			ChannelID:   discordConfig.VerificationServiceB.ChannelID,
-			CommandName: discordConfig.VerificationServiceB.CommandName,
-			ServiceName: "verification_service_b",
-		}, proxyB, logger)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create verification service B: %w", err)
+	// Initialize Service B tokens
+	for i, tokenConfig := range discordConfig.VerificationServiceB.Tokens {
+		proxy, ok := proxyAssignments[tokenConfig.Token]
+		if !ok {
+			return nil, fmt.Errorf("%w B token %d", ErrNoProxyAssigned, i)
 		}
 
-		services = append(services, serviceB)
+		serviceName := fmt.Sprintf("verification_service_b_%d", i)
 
-		logger.Info("Initialized verification service B",
-			zap.String("proxy_host", proxyB.Host))
+		serviceB, err := NewServiceB(Config{
+			Token:       tokenConfig.Token,
+			GuildID:     tokenConfig.GuildID,
+			ChannelID:   tokenConfig.ChannelID,
+			CommandName: discordConfig.VerificationServiceB.CommandName,
+			ServiceName: serviceName,
+		}, proxy, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create verification service B token %d: %w", i, err)
+		}
+
+		servicesB = append(servicesB, serviceB)
+
+		logger.Info("Initialized verification service B token",
+			zap.Int("token_index", i),
+			zap.Int("proxy_index", proxyIndices[tokenConfig.Token]),
+			zap.String("proxy_host", proxy.Host),
+			zap.Uint64("guild_id", tokenConfig.GuildID),
+			zap.Uint64("channel_id", tokenConfig.ChannelID))
+	}
+
+	// Validate equal token counts
+	if len(servicesA) != len(servicesB) {
+		return nil, fmt.Errorf("%w: Service A has %d tokens, Service B has %d tokens (must be equal)",
+			ErrMismatchedTokenCount, len(servicesA), len(servicesB))
+	}
+
+	// Create token pairs
+	numPairs := len(servicesA)
+
+	pairs := make([]TokenPair, numPairs)
+	for i := range numPairs {
+		pairs[i] = TokenPair{
+			ServiceA: servicesA[i],
+			ServiceB: servicesB[i],
+		}
+		logger.Info("Created token pair",
+			zap.Int("pair_index", i),
+			zap.String("service_a", servicesA[i].GetServiceName()),
+			zap.String("service_b", servicesB[i].GetServiceName()))
 	}
 
 	return &ServiceManager{
-		services: services,
-		logger:   logger,
+		pairs:  pairs,
+		logger: logger,
 	}, nil
 }
 
 // Start initializes all verification services.
 func (m *ServiceManager) Start(ctx context.Context) error {
-	for _, service := range m.services {
-		if starter, ok := service.(interface{ Start(context.Context) error }); ok {
+	for _, pair := range m.pairs {
+		if starter, ok := pair.ServiceA.(interface{ Start(context.Context) error }); ok {
 			if err := starter.Start(ctx); err != nil {
-				return fmt.Errorf("failed to start verification service: %w", err)
+				return fmt.Errorf("failed to start verification service A: %w", err)
+			}
+		}
+
+		if starter, ok := pair.ServiceB.(interface{ Start(context.Context) error }); ok {
+			if err := starter.Start(ctx); err != nil {
+				return fmt.Errorf("failed to start verification service B: %w", err)
 			}
 		}
 	}
@@ -85,24 +147,39 @@ func (m *ServiceManager) Start(ctx context.Context) error {
 
 // Close shuts down all verification services.
 func (m *ServiceManager) Close() error {
-	for _, service := range m.services {
-		if err := service.Close(); err != nil {
-			m.logger.Warn("Failed to close verification service", zap.Error(err))
+	for _, pair := range m.pairs {
+		if err := pair.ServiceA.Close(); err != nil {
+			m.logger.Warn("Failed to close verification service A", zap.Error(err))
+		}
+
+		if err := pair.ServiceB.Close(); err != nil {
+			m.logger.Warn("Failed to close verification service B", zap.Error(err))
 		}
 	}
 
 	return nil
 }
 
-// GetServices returns the array of verification services for use in scanners.
-func (m *ServiceManager) GetServices() []Service {
-	return m.services
+// GetPairCount returns the number of token pairs available.
+func (m *ServiceManager) GetPairCount() int {
+	return len(m.pairs)
 }
 
-// FetchAllVerificationProfiles queries all external verification services for linked Roblox accounts.
-func (m *ServiceManager) FetchAllVerificationProfiles(
-	ctx context.Context, discordUserID uint64,
+// FetchVerificationProfilesWithPair queries a specific token pair for linked Roblox accounts.
+func (m *ServiceManager) FetchVerificationProfilesWithPair(
+	ctx context.Context, discordUserID uint64, pairIndex int,
 ) []*types.DiscordRobloxConnection {
+	if pairIndex < 0 || pairIndex >= len(m.pairs) {
+		m.logger.Error("Invalid pair index",
+			zap.Int("pair_index", pairIndex),
+			zap.Int("total_pairs", len(m.pairs)))
+
+		return nil
+	}
+
+	pair := m.pairs[pairIndex]
+	services := []Service{pair.ServiceA, pair.ServiceB}
+
 	var (
 		connections []*types.DiscordRobloxConnection
 		mu          sync.Mutex
@@ -110,13 +187,13 @@ func (m *ServiceManager) FetchAllVerificationProfiles(
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	// Attempt each verification service concurrently
-	for i, service := range m.services {
+	// Query both services in the pair concurrently
+	for _, service := range services {
 		g.Go(func() error {
 			serviceName := service.GetServiceName()
 
 			m.logger.Debug("Attempting verification service",
-				zap.Int("service_index", i),
+				zap.Int("pair_index", pairIndex),
 				zap.String("service_name", serviceName),
 				zap.Uint64("discord_user_id", discordUserID))
 

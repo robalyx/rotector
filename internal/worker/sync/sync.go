@@ -233,19 +233,10 @@ func (w *Worker) syncAccountServers(
 
 			failedGuilds++
 
-			// If we got partial results, we'll still try to save them
-			if len(members) == 0 {
-				progress.processedGuilds.Add(1)
-				progress.failedGuilds.Add(1)
+			progress.processedGuilds.Add(1)
+			progress.failedGuilds.Add(1)
 
-				continue
-			}
-
-			w.logger.Info("Adding partial member results despite sync error",
-				zap.Int("account_index", accountIndex),
-				zap.String("guild_name", guild.Name),
-				zap.Uint64("guildID", serverID),
-				zap.Int("partial_member_count", len(members)))
+			continue
 		}
 
 		w.logger.Debug("Adding members to database",
@@ -294,10 +285,7 @@ func (w *Worker) syncServerMembersForAccount(
 
 	attemptedChannels := make(map[discord.ChannelID]struct{})
 
-	var (
-		lastError  error
-		allMembers []*types.DiscordServerMember
-	)
+	var lastError error
 
 	for attempt := range maxChannelAttempts {
 		targetChannel, err := w.findTextChannelForAccount(accountIndex, guildID, attemptedChannels, s)
@@ -316,15 +304,15 @@ func (w *Worker) syncServerMembersForAccount(
 			zap.Int("max_attempts", maxChannelAttempts))
 
 		if attempt > 0 {
-			thinkingDelay := 3 * time.Second
+			retryDelay := 5 * time.Second
 			w.logger.Debug("Waiting before trying new channel",
 				zap.Int("account_index", accountIndex),
-				zap.Duration("delay", thinkingDelay))
-			time.Sleep(thinkingDelay)
+				zap.Duration("delay", retryDelay))
+			time.Sleep(retryDelay)
 		}
 
 		// Wait for rate limit slot
-		if err := w.discordRateLimiter.WaitForNextSlot(ctx); err != nil {
+		if err := w.rateLimiters[accountIndex].WaitForNextSlot(ctx); err != nil {
 			return nil, err
 		}
 
@@ -341,26 +329,11 @@ func (w *Worker) syncServerMembersForAccount(
 
 		lastError = err
 
-		allMembers = append(allMembers, members...)
-
 		w.logger.Info("Retrying member sync with different channel",
 			zap.Int("account_index", accountIndex),
 			zap.String("guildID", guildID.String()),
 			zap.String("previous_channel", targetChannel.String()),
-			zap.Int("members_so_far", len(allMembers)),
 			zap.Int("attempt", attempt+1))
-
-		if attempt < maxChannelAttempts-1 {
-			channelSwitchDelay := 7 * time.Second
-			w.logger.Debug("Waiting before trying next channel",
-				zap.Int("account_index", accountIndex),
-				zap.Duration("delay", channelSwitchDelay))
-			time.Sleep(channelSwitchDelay)
-		}
-	}
-
-	if len(allMembers) > 0 {
-		return allMembers, nil
 	}
 
 	return nil, fmt.Errorf("failed to sync guild members after %d channel attempts: %w", maxChannelAttempts, lastError)
@@ -379,19 +352,32 @@ func (w *Worker) findTextChannelForAccount(
 	// Get bot's user ID for permission checks
 	botUserID := s.Ready().User.ID
 
-	// Filter for text channels that the bot can view
-	textChannels := make([]discord.Channel, 0, len(channels))
+	// Priority channel names that typically contain full member lists
+	priorityNames := []string{
+		"general", "main", "announce", "welcome", "lobby",
+		"chat", "lounge", "hangout", "discuss", "community",
+	}
+
+	var (
+		priorityChannel discord.ChannelID
+		activeChannel   discord.ChannelID
+		fallbackChannel discord.ChannelID
+		highestMsgID    discord.MessageID
+	)
+
+	// Filter and prioritize channels
 	for _, channel := range channels {
+		// Skip non-text channels
 		if channel.Type != discord.GuildText {
 			continue
 		}
 
-		// Skip channels that were already attempted
+		// Skip already attempted channels
 		if _, attempted := attemptedChannels[channel.ID]; attempted {
 			continue
 		}
 
-		// Check if bot has VIEW_CHANNEL permission
+		// Check permissions
 		perms, err := s.Permissions(channel.ID, botUserID)
 		if err != nil {
 			w.logger.Debug("Failed to check permissions for channel",
@@ -408,93 +394,53 @@ func (w *Worker) findTextChannelForAccount(
 			continue
 		}
 
-		textChannels = append(textChannels, channel)
-	}
+		// Check for priority channel name
+		if priorityChannel == 0 {
+			channelName := strings.ToLower(channel.Name)
+			for _, priorityName := range priorityNames {
+				if strings.Contains(channelName, priorityName) {
+					priorityChannel = channel.ID
 
-	channels = textChannels
-
-	if len(channels) == 0 {
-		return 0, ErrNoTextChannel
-	}
-
-	// Priority channel names that typically contain full member lists
-	priorityNames := []string{
-		"general",
-		"main",
-		"announce",
-		"welcome",
-		"lobby",
-		"chat",
-		"lounge",
-		"hangout",
-		"discuss",
-		"community",
-	}
-
-	// First pass: check for priority channels by name
-	for _, channel := range channels {
-		// Skip channels that are already attempted
-		if _, attempted := attemptedChannels[channel.ID]; attempted {
-			continue
-		}
-
-		// Check if the channel name contains any priority name
-		channelName := strings.ToLower(channel.Name)
-		for _, priorityName := range priorityNames {
-			if strings.Contains(channelName, priorityName) {
-				w.logger.Debug("Selected priority channel for member list",
-					zap.String("guildID", guildID.String()),
-					zap.String("channelID", channel.ID.String()),
-					zap.String("channel_name", channel.Name))
-
-				return channel.ID, nil
+					break
+				}
 			}
 		}
-	}
 
-	// Second pass: find the most suitable channel based on recent activity
-	var (
-		mostSuitableChannel discord.ChannelID
-		highestMessageID    discord.MessageID
-	)
-
-	for _, channel := range channels {
-		// Skip channels that are already attempted
-		if _, attempted := attemptedChannels[channel.ID]; attempted {
-			continue
+		// Track most active channel
+		if channel.LastMessageID > highestMsgID {
+			activeChannel = channel.ID
+			highestMsgID = channel.LastMessageID
 		}
 
-		// If this is the first valid channel or it has a more recent message
-		if mostSuitableChannel == 0 || channel.LastMessageID > highestMessageID {
-			mostSuitableChannel = channel.ID
-			highestMessageID = channel.LastMessageID
+		// Track first valid channel as fallback
+		if fallbackChannel == 0 {
+			fallbackChannel = channel.ID
 		}
 	}
 
-	// If we found a suitable channel
-	if mostSuitableChannel != 0 {
+	// Return in priority order
+	if priorityChannel != 0 {
+		w.logger.Debug("Selected priority channel for member list",
+			zap.String("guildID", guildID.String()),
+			zap.String("channelID", priorityChannel.String()))
+
+		return priorityChannel, nil
+	}
+
+	if activeChannel != 0 {
 		w.logger.Debug("Selected active channel for member list",
 			zap.String("guildID", guildID.String()),
-			zap.String("channelID", mostSuitableChannel.String()),
-			zap.String("messageID", highestMessageID.String()))
+			zap.String("channelID", activeChannel.String()))
 
-		return mostSuitableChannel, nil
+		return activeChannel, nil
 	}
 
-	// If all channels were attempted or unsuitable
-	if len(attemptedChannels) == len(channels) {
-		return 0, ErrAllChannelsAttempted
-	}
+	if fallbackChannel != 0 {
+		w.logger.Debug("Selected fallback channel for member list",
+			zap.String("guildID", guildID.String()),
+			zap.String("channelID", fallbackChannel.String()))
 
-	// Last resort: just pick the first non-attempted channel
-	for _, channel := range channels {
-		if _, attempted := attemptedChannels[channel.ID]; !attempted {
-			w.logger.Warn("Falling back to first available channel for member list",
-				zap.String("guildID", guildID.String()),
-				zap.String("channelID", channel.ID.String()))
-
-			return channel.ID, nil
-		}
+		return fallbackChannel, nil
 	}
 
 	return 0, ErrNoTextChannel
@@ -651,7 +597,7 @@ func (w *Worker) syncMemberChunksForAccount(
 				nextChunk := currentMaxChunk + 1
 
 				// Wait for rate limit slot
-				if err := w.discordRateLimiter.WaitForNextSlot(ctx); err != nil {
+				if err := w.rateLimiters[accountIndex].WaitForNextSlot(ctx); err != nil {
 					return allMembers, err
 				}
 
@@ -697,7 +643,7 @@ func (w *Worker) handleMemberListNotFoundForAccount(
 	}
 
 	// Wait for rate limit slot
-	if err := w.discordRateLimiter.WaitForNextSlot(ctx); err != nil {
+	if err := w.rateLimiters[accountIndex].WaitForNextSlot(ctx); err != nil {
 		return false, err
 	}
 

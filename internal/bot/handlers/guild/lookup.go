@@ -142,8 +142,10 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 				username = scannedUsername
 
 				// Fetch and add verification connections
-				verificationConns := m.layout.verificationManager.FetchAllVerificationProfiles(ctx.Context(), discordUserID)
-				connections = append(connections, verificationConns...)
+				if m.layout.verificationManager.GetPairCount() > 0 {
+					verificationConns := m.layout.verificationManager.FetchVerificationProfilesWithPair(ctx.Context(), discordUserID, 0)
+					connections = append(connections, verificationConns...)
+				}
 
 				// Process all connections
 				if len(connections) > 0 {

@@ -27,6 +27,7 @@ type UserCheckerParams struct {
 	InappropriateProfileFlags map[int64]struct{}          `json:"inappropriateProfileFlags"`
 	InappropriateFriendsFlags map[int64]struct{}          `json:"inappropriateFriendsFlags"`
 	InappropriateGroupsFlags  map[int64]struct{}          `json:"inappropriateGroupsFlags"`
+	FromQueueWorker           bool                        `json:"fromQueueWorker"`
 }
 
 // UserChecker coordinates the checking process by combining results from
@@ -164,6 +165,7 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		InappropriateProfileFlags: params.InappropriateProfileFlags,
 		InappropriateFriendsFlags: params.InappropriateFriendsFlags,
 		InappropriateGroupsFlags:  params.InappropriateGroupsFlags,
+		FromQueueWorker:           params.FromQueueWorker,
 	})
 
 	// Generate detailed reasons for all accepted users
