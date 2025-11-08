@@ -178,6 +178,7 @@ func (e *BaseExecutor) handleMessage(msg discord.Message) {
 			// Add message ID mapping for future message update events
 			e.mu.Lock()
 			e.pendingRequests[messageID] = req
+			delete(e.pendingRequests, nonce)
 			e.mu.Unlock()
 
 			e.logger.Debug("Mapped nonce to message ID",
