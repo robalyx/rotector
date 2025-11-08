@@ -354,7 +354,7 @@ func (a *OutfitAnalyzer) analyzeOutfitRange(
 	// Process outfits
 	result := a.processOutfitDownloads(ctx, info, downloads)
 
-	a.logger.Info("Completed outfit scan",
+	a.logger.Debug("Completed outfit scan",
 		zap.Int64("userID", info.ID),
 		zap.String("username", info.Name),
 		zap.Int("start", start),
@@ -525,6 +525,9 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.1),
 	}
+
+	// Configure extra fields for model
+	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).Build())
 
 	// Make API request
 	var analysis OutfitThemeAnalysis

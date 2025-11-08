@@ -152,6 +152,7 @@ func (w *Worker) Start(ctx context.Context) {
 			InappropriateProfileFlags: batchData.ProfileFlags,
 			InappropriateFriendsFlags: batchData.FriendsFlags,
 			InappropriateGroupsFlags:  batchData.GroupsFlags,
+			FromQueueWorker:           true,
 		})
 
 		// Step 4: Mark users as processed (75%)

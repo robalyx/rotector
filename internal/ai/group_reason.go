@@ -339,6 +339,9 @@ func (a *GroupReasonAnalyzer) processGroupBatch(ctx context.Context, batch []Use
 		TopP:        openai.Float(0.4),
 	}
 
+	// Configure extra fields for model
+	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).Build())
+
 	// Make API request
 	var result BatchGroupAnalysis
 

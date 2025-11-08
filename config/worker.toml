@@ -46,17 +46,17 @@ message_analysis = 5
 # Number of outfits to analyze in one AI request
 outfit_analysis_batch = 16
 # Number of users to analyze in one AI request
-user_analysis_batch = 20
+user_analysis_batch = 15
 # Number of users to analyze in one user reason AI request
-user_reason_analysis_batch = 20
+user_reason_analysis_batch = 15
 # Number of users to analyze in one friend reason AI request
-friend_reason_analysis_batch = 20
+friend_reason_analysis_batch = 15
 # Number of users to analyze in one group reason AI request
-group_reason_analysis_batch = 20
+group_reason_analysis_batch = 15
 # Number of users to analyze in one outfit reason AI request
-outfit_reason_analysis_batch = 20
+outfit_reason_analysis_batch = 15
 # Number of users to analyze in one category AI request
-category_analysis_batch = 20
+category_analysis_batch = 15
 
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker
