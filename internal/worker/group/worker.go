@@ -157,6 +157,7 @@ func (w *Worker) Start(ctx context.Context) {
 			InappropriateProfileFlags: nil,
 			InappropriateFriendsFlags: nil,
 			InappropriateGroupsFlags:  nil,
+			FromQueueWorker:           false,
 		})
 
 		// Mark processed users in cache to prevent reprocessing

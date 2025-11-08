@@ -76,6 +76,9 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalSt
 		MaxCompletionTokens: openai.Int(512),
 	}
 
+	// Configure extra fields for model
+	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).Build())
+
 	// Generate welcome message
 	var response string
 

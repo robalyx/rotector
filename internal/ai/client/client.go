@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
-	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -23,25 +21,8 @@ import (
 var (
 	ErrNoProvidersAvailable = errors.New("no providers available")
 	ErrInvalidResponse      = errors.New("invalid response from API")
+	ErrResponseTruncated    = errors.New("response truncated at max_tokens limit")
 )
-
-// defaultSettings contains default configuration for all AI requests.
-var defaultSettings = map[string]any{
-	"max_tokens": 8192,
-	"reasoning": map[string]any{
-		"enabled":    false,
-		"max_tokens": 1,
-	},
-}
-
-// geminiSafetySettings defines safety thresholds for Gemini models.
-var geminiSafetySettings = []map[string]any{
-	{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
-	{"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF"},
-	{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF"},
-	{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF"},
-	{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF"},
-}
 
 // AIClient implements the Client interface.
 type AIClient struct {
@@ -91,26 +72,6 @@ func NewClient(cfg *config.OpenAI, usageTracker *manager.AIUsage, logger *zap.Lo
 		logger:        logger.Named("ai_client"),
 		blockChan:     make(chan struct{}),
 	}, nil
-}
-
-// buildExtraFields constructs the extra fields map for API requests based on model type.
-func buildExtraFields(modelName string) map[string]any {
-	extraFields := make(map[string]any)
-
-	// Apply default settings to all models
-	maps.Copy(extraFields, defaultSettings)
-
-	// Apply settings for Gemini models
-	if strings.Contains(strings.ToLower(modelName), "gemini") {
-		extraFields["safety_settings"] = geminiSafetySettings
-		extraFields["providerOptions"] = map[string]any{
-			"gateway": map[string]any{
-				"only": []string{"vertex"},
-			},
-		}
-	}
-
-	return extraFields
 }
 
 // Chat returns a ChatCompletions implementation.
@@ -182,9 +143,6 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 		return nil, fmt.Errorf("%w: %s", ErrNoProvidersAvailable, originalModel)
 	}
 
-	// Add extra fields based on model type
-	params.SetExtraFields(buildExtraFields(params.Model))
-
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
 		return nil, fmt.Errorf("failed to acquire semaphore: %w", err)
@@ -236,9 +194,6 @@ func (c *chatCompletions) NewWithRetry(
 		return fmt.Errorf("%w: %s", ErrNoProvidersAvailable, originalModel)
 	}
 
-	// Add extra fields based on model type
-	params.SetExtraFields(buildExtraFields(params.Model))
-
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
 		return fmt.Errorf("failed to acquire semaphore: %w", err)
@@ -246,9 +201,10 @@ func (c *chatCompletions) NewWithRetry(
 	defer c.client.semaphore.Release(1)
 
 	var (
-		attempt uint64
-		resp    *openai.ChatCompletion
-		lastErr error
+		attempt              uint64
+		resp                 *openai.ChatCompletion
+		lastErr              error
+		triedWithoutThinking bool
 	)
 
 	options := utils.GetAIRetryOptions()
@@ -258,6 +214,30 @@ func (c *chatCompletions) NewWithRetry(
 		// Check context before making request
 		if err := ctx.Err(); err != nil {
 			return backoff.Permanent(err)
+		}
+
+		// Auto-disable thinking mode on truncation
+		if errors.Is(lastErr, ErrResponseTruncated) && !triedWithoutThinking {
+			if extraFields := params.ExtraFields(); extraFields != nil {
+				if reasoning, ok := extraFields["reasoning"].(map[string]any); ok {
+					if enabled, ok := reasoning["enabled"].(bool); ok && enabled {
+						reasoning["enabled"] = false
+						triedWithoutThinking = true
+
+						c.client.logger.Info("Response truncated, disabling thinking mode for retry",
+							zap.String("model", params.Model),
+							zap.Uint64("attempt", attempt))
+					}
+				}
+			}
+		}
+
+		// Check if still truncated after disabling thinking
+		if errors.Is(lastErr, ErrResponseTruncated) && triedWithoutThinking {
+			c.client.logger.Warn("Response still truncated after disabling thinking mode",
+				zap.String("model", params.Model))
+
+			return backoff.Permanent(lastErr)
 		}
 
 		attempt++
@@ -388,9 +368,6 @@ func (c *chatCompletions) NewStreaming(
 		)
 	}
 
-	// Add extra fields based on model type
-	params.SetExtraFields(buildExtraFields(params.Model))
-
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
 		return ssestream.NewStream[openai.ChatCompletionChunk](
@@ -470,10 +447,12 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, model s
 		return fmt.Errorf("%w: unknown finish reason: %s", ErrInvalidResponse, finishReason)
 	}
 
-	// Log warning if response was truncated due to length limit
+	// Check if response was truncated due to length limit
 	if finishReason == "length" {
 		c.client.logger.Warn("Response truncated at max_tokens limit",
 			zap.String("model", model))
+
+		return ErrResponseTruncated
 	}
 
 	if err != nil {

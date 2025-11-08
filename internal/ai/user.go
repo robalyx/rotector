@@ -43,13 +43,15 @@ type ProcessUsersParams struct {
 	InappropriateProfileFlags map[int64]struct{}                           `json:"inappropriateProfileFlags"`
 	InappropriateFriendsFlags map[int64]struct{}                           `json:"inappropriateFriendsFlags"`
 	InappropriateGroupsFlags  map[int64]struct{}                           `json:"inappropriateGroupsFlags"`
+	FromQueueWorker           bool                                         `json:"fromQueueWorker"`
 }
 
 // UserSummary is a struct for user summaries for AI analysis.
 type UserSummary struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"displayName,omitempty"`
-	Description string `json:"description"`
+	Name                  string `json:"name"`
+	DisplayName           string `json:"displayName,omitempty"`
+	Description           string `json:"description"`
+	TranslatedDescription string `json:"translatedDescription,omitempty"`
 }
 
 // FlaggedUsers holds a list of users that the AI has identified as inappropriate.
@@ -251,6 +253,9 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 		TopP:        openai.Float(0.2),
 	}
 
+	// Configure extra fields for model
+	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).WithReasoning(2048).Build())
+
 	// Make API request
 	var result FlaggedUsers
 
@@ -300,23 +305,7 @@ func (a *UserAnalyzer) processBatch(
 			translatedInfo = userInfo
 		}
 
-		summary := UserSummary{
-			Name: translatedInfo.Name,
-		}
-
-		// Only include display name if it's different from the username
-		if translatedInfo.DisplayName != translatedInfo.Name {
-			summary.DisplayName = translatedInfo.DisplayName
-		}
-
-		// Replace empty descriptions with placeholder
-		description := translatedInfo.Description
-		if description == "" {
-			description = "No description"
-		}
-
-		summary.Description = description
-
+		summary := createUserSummary(userInfo, translatedInfo)
 		userInfosWithoutID = append(userInfosWithoutID, summary)
 	}
 
@@ -445,8 +434,13 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 			return false
 		}
 
-		// For older accounts, use stricter validation
-		if flaggedUser.Confidence < 0.7 {
+		// Determine confidence threshold based on user source
+		confidenceThreshold := 0.8
+		if params.FromQueueWorker {
+			confidenceThreshold = 0.7
+		}
+
+		if flaggedUser.Confidence < confidenceThreshold {
 			// Exception: Don't skip if ALL friends are inappropriate and confidence >= 0.5
 			if flaggedUser.Confidence >= 0.5 {
 				confirmedFriends := params.ConfirmedFriendsMap[originalInfo.ID]
@@ -469,7 +463,8 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 			a.logger.Info("Skipping user with low confidence and no existing reasons",
 				zap.Int64("userID", originalInfo.ID),
 				zap.String("username", flaggedUser.Name),
-				zap.Float64("confidence", flaggedUser.Confidence))
+				zap.Float64("confidence", flaggedUser.Confidence),
+				zap.Bool("fromQueue", params.FromQueueWorker))
 
 			return true
 		}
@@ -540,26 +535,11 @@ func (a *UserAnalyzer) processAndCreateRequests(
 		mu.Unlock()
 
 		// Create a user summary for the reason request
-		summary := &UserSummary{
-			Name: translatedInfo.Name,
-		}
-
-		// Only include display name if it's different from the username
-		if translatedInfo.DisplayName != translatedInfo.Name {
-			summary.DisplayName = translatedInfo.DisplayName
-		}
-
-		// Replace empty descriptions with placeholder
-		description := translatedInfo.Description
-		if description == "" {
-			description = "No description"
-		}
-
-		summary.Description = description
+		summary := createUserSummary(originalInfo, translatedInfo)
 
 		// Create the user reason request
 		userReasonRequest := UserReasonRequest{
-			User:            summary,
+			User:            &summary,
 			Confidence:      flaggedUser.Confidence,
 			Hint:            flaggedUser.Hint,
 			FlaggedFields:   flaggedUser.FlaggedFields,
@@ -592,4 +572,37 @@ func (a *UserAnalyzer) processAndCreateRequests(
 			zap.Strings("languagePattern", flaggedUser.LanguagePattern),
 			zap.Strings("languageUsed", flaggedUser.LanguageUsed))
 	}
+}
+
+// createUserSummary builds a UserSummary from original and translated user info.
+func createUserSummary(originalInfo, translatedInfo *types.ReviewUser) UserSummary {
+	summary := UserSummary{
+		Name: originalInfo.Name,
+	}
+
+	// Only include display name if it's different from the username
+	if originalInfo.DisplayName != originalInfo.Name {
+		summary.DisplayName = originalInfo.DisplayName
+	}
+
+	// Replace empty descriptions with placeholder
+	originalDescription := originalInfo.Description
+	translatedDescription := translatedInfo.Description
+
+	if originalDescription == "" {
+		originalDescription = "No description"
+	}
+
+	if translatedDescription == "" {
+		translatedDescription = "No description"
+	}
+
+	summary.Description = originalDescription
+
+	// Only include translated description if it differs from original
+	if utils.CompressAllWhitespace(originalDescription) != utils.CompressAllWhitespace(translatedDescription) {
+		summary.TranslatedDescription = translatedDescription
+	}
+
+	return summary
 }

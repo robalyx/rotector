@@ -255,6 +255,9 @@ func (a *UserReasonAnalyzer) processReasonBatch(ctx context.Context, batch []Use
 		TopP:        openai.Float(0.2),
 	}
 
+	// Configure extra fields for model
+	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).Build())
+
 	// Make API request
 	var result ReasonAnalysisResult
 

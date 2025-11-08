@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -25,7 +26,17 @@ const (
 	MinFriendPercentage = 30.0
 	// MinFriendsInSystem is the minimum number of friends that must be in the system for flagged users.
 	MinFriendsInSystem = 10
+	// DatabaseQueryBatchSize is the batch size for database queries to avoid overwhelming the database.
+	DatabaseQueryBatchSize = 1000
 )
+
+// NetworkStats represents statistics about a user's network for filtering.
+type NetworkStats struct {
+	TotalFriends        int  // Total number of friends
+	FlaggedFriends      int  // Number of flagged or confirmed friends
+	ConfirmedFriends    int  // Number of confirmed friends only
+	HasConfirmedOrMixed bool // Whether user has any confirmed or mixed groups
+}
 
 // Worker processes user friend networks by checking each friend's
 // status and analyzing their profiles for inappropriate content.
@@ -134,6 +145,7 @@ func (w *Worker) Start(ctx context.Context) {
 			InappropriateProfileFlags: nil,
 			InappropriateFriendsFlags: nil,
 			InappropriateGroupsFlags:  nil,
+			FromQueueWorker:           false,
 		})
 
 		// Mark processed users in cache to prevent reprocessing
@@ -285,7 +297,8 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 				userInfos := w.userFetcher.FetchInfos(ctx, unprocessedIDs)
 
 				if len(userInfos) > 0 {
-					validFriends = append(validFriends, userInfos...)
+					filteredUserInfos := w.filterUsersByNetwork(ctx, userInfos)
+					validFriends = append(validFriends, filteredUserInfos...)
 
 					w.logger.Debug("Added friends for processing",
 						zap.Int64("userID", user.ID),
@@ -294,6 +307,7 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 						zap.Int("newFriends", len(friendIDs)),
 						zap.Int("unprocessedFriends", len(unprocessedIDs)),
 						zap.Int("fetchedFriends", len(userInfos)),
+						zap.Int("filteredFriends", len(filteredUserInfos)),
 						zap.Int("totalValidFriends", len(validFriends)))
 				}
 			}
@@ -314,4 +328,181 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 	}
 
 	return validFriends, nil
+}
+
+// filterUsersByNetwork filters users based on their network characteristics.
+func (w *Worker) filterUsersByNetwork(ctx context.Context, userInfos []*types.ReviewUser) []*types.ReviewUser {
+	if len(userInfos) == 0 {
+		return userInfos
+	}
+
+	// Collect all friend IDs and group IDs from all users
+	allFriendIDs := make(map[int64]bool)
+	allGroupIDs := make(map[int64]bool)
+
+	for _, user := range userInfos {
+		for _, friend := range user.Friends {
+			allFriendIDs[friend.ID] = true
+		}
+
+		for _, group := range user.Groups {
+			allGroupIDs[group.Group.ID] = true
+		}
+	}
+
+	// Convert maps to slices
+	friendIDsList := make([]int64, 0, len(allFriendIDs))
+	for friendID := range allFriendIDs {
+		friendIDsList = append(friendIDsList, friendID)
+	}
+
+	groupIDsList := make([]int64, 0, len(allGroupIDs))
+	for groupID := range allGroupIDs {
+		groupIDsList = append(groupIDsList, groupID)
+	}
+
+	// Query friend and group statuses
+	friendStatuses, err := w.batchQueryFriendStatuses(ctx, friendIDsList)
+	if err != nil {
+		w.logger.Error("Failed to query friend statuses, processing all users", zap.Error(err))
+		return userInfos
+	}
+
+	groupStatuses, err := w.batchQueryGroupStatuses(ctx, groupIDsList)
+	if err != nil {
+		w.logger.Error("Failed to query group statuses, processing all users", zap.Error(err))
+		return userInfos
+	}
+
+	// Filter users based on criteria
+	filtered := make([]*types.ReviewUser, 0, len(userInfos))
+	filteredCount := 0
+
+	for _, user := range userInfos {
+		// Calculate network stats for this user
+		stats := w.calculateUserNetworkStats(user, friendStatuses, groupStatuses)
+
+		// Apply filter criteria
+		if stats.FlaggedFriends >= 4 ||
+			stats.ConfirmedFriends >= 2 ||
+			(stats.TotalFriends > 0 && float64(stats.FlaggedFriends)/float64(stats.TotalFriends) >= 0.5) ||
+			stats.HasConfirmedOrMixed {
+			filtered = append(filtered, user)
+		} else {
+			filteredCount++
+		}
+	}
+
+	// Log filtering metrics
+	if len(userInfos) > 0 {
+		filterRate := float64(filteredCount) / float64(len(userInfos)) * 100
+
+		w.logger.Info("Network filtering summary",
+			zap.Int("totalUsers", len(userInfos)),
+			zap.Int("processedUsers", len(filtered)),
+			zap.Int("filteredUsers", filteredCount),
+			zap.Int("totalFriendIDs", len(friendIDsList)),
+			zap.Int("totalGroupIDs", len(groupIDsList)),
+			zap.Float64("filterRate", filterRate))
+	}
+
+	return filtered
+}
+
+// batchQueryFriendStatuses queries friend statuses in batches.
+func (w *Worker) batchQueryFriendStatuses(
+	ctx context.Context, friendIDs []int64,
+) (map[int64]enum.UserType, error) {
+	friendStatuses := make(map[int64]enum.UserType)
+
+	if len(friendIDs) == 0 {
+		return friendStatuses, nil
+	}
+
+	// Process in chunks
+	for i := 0; i < len(friendIDs); i += DatabaseQueryBatchSize {
+		end := min(i+DatabaseQueryBatchSize, len(friendIDs))
+		chunk := friendIDs[i:end]
+
+		// Query this chunk
+		friends, err := w.db.Model().User().GetUsersByIDs(
+			ctx, chunk, types.UserFieldID|types.UserFieldStatus,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get friend statuses for chunk %d-%d: %w", i, end, err)
+		}
+
+		// Merge into result map
+		for id, friend := range friends {
+			friendStatuses[id] = friend.Status
+		}
+	}
+
+	return friendStatuses, nil
+}
+
+// batchQueryGroupStatuses queries group statuses in batches.
+func (w *Worker) batchQueryGroupStatuses(
+	ctx context.Context, groupIDs []int64,
+) (map[int64]enum.GroupType, error) {
+	groupStatuses := make(map[int64]enum.GroupType)
+
+	if len(groupIDs) == 0 {
+		return groupStatuses, nil
+	}
+
+	// Process in chunks
+	for i := 0; i < len(groupIDs); i += DatabaseQueryBatchSize {
+		end := min(i+DatabaseQueryBatchSize, len(groupIDs))
+		chunk := groupIDs[i:end]
+
+		// Query this chunk
+		groups, err := w.db.Model().Group().GetGroupsByIDs(
+			ctx, chunk, types.GroupFieldID|types.GroupFieldStatus,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get group statuses for chunk %d-%d: %w", i, end, err)
+		}
+
+		// Merge into result map
+		for id, group := range groups {
+			groupStatuses[id] = group.Status
+		}
+	}
+
+	return groupStatuses, nil
+}
+
+// calculateUserNetworkStats calculates network statistics for a user based on their friends and groups.
+func (w *Worker) calculateUserNetworkStats(
+	user *types.ReviewUser, friendStatuses map[int64]enum.UserType, groupStatuses map[int64]enum.GroupType,
+) *types.NetworkStats {
+	stats := &types.NetworkStats{
+		TotalFriends: len(user.Friends),
+	}
+
+	// Count flagged/confirmed friends
+	for _, friend := range user.Friends {
+		if status, exists := friendStatuses[friend.ID]; exists {
+			if status == enum.UserTypeFlagged || status == enum.UserTypeConfirmed {
+				stats.FlaggedFriends++
+			}
+
+			if status == enum.UserTypeConfirmed {
+				stats.ConfirmedFriends++
+			}
+		}
+	}
+
+	// Check for confirmed/mixed groups
+	for _, group := range user.Groups {
+		if status, exists := groupStatuses[group.Group.ID]; exists {
+			if status == enum.GroupTypeConfirmed || status == enum.GroupTypeMixed {
+				stats.HasConfirmedOrMixed = true
+				break
+			}
+		}
+	}
+
+	return stats
 }
