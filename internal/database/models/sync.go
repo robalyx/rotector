@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +12,8 @@ import (
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
+
+var ErrNoUsersNeedScanning = errors.New("no users need scanning")
 
 // SyncModel handles database operations for Discord server syncing.
 type SyncModel struct {
@@ -118,6 +122,21 @@ func (m *SyncModel) UpsertServerMembers(
 			_, err = query.Exec(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to insert user full scans: %w", err)
+			}
+
+			// Update guild count for affected users
+			userIDs := make([]uint64, 0, len(uniqueUsers))
+			for userID := range uniqueUsers {
+				userIDs = append(userIDs, userID)
+			}
+
+			_, err = tx.NewUpdate().
+				Model((*types.DiscordUserFullScan)(nil)).
+				Set("guild_count = (SELECT COUNT(*) FROM discord_server_members dsm WHERE dsm.user_id = discord_user_full_scan.user_id)").
+				Where("user_id IN (?)", bun.In(userIDs)).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update guild counts: %w", err)
 			}
 		}
 
@@ -480,6 +499,61 @@ func (m *SyncModel) GetUsersForFullScan(ctx context.Context, before time.Time, l
 
 		return userIDs, nil
 	})
+}
+
+// GetUserForFullScan atomically fetches one user and updates their scan timestamp.
+func (m *SyncModel) GetUserForFullScan(ctx context.Context, before time.Time) (*uint64, error) {
+	sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour)
+	now := time.Now()
+
+	var userID uint64
+
+	err := dbretry.Transaction(ctx, m.db, func(ctx context.Context, tx bun.Tx) error {
+		err := tx.NewRaw(`
+			SELECT dufs.user_id
+			FROM discord_user_full_scans dufs
+			LEFT JOIN discord_roblox_connections drc ON drc.discord_user_id = dufs.user_id
+			WHERE
+				-- Priority 1: High-value users (3+ guilds, no connection) with 7-day window
+				(dufs.guild_count >= 3
+					AND drc.discord_user_id IS NULL
+					AND dufs.last_scan < ?)
+				OR
+				-- Priority 2: Everyone else with 12-hour window
+				(NOT (dufs.guild_count >= 3 AND drc.discord_user_id IS NULL)
+					AND dufs.last_scan < ?)
+			ORDER BY
+				-- Process Priority 1 users first
+				CASE
+					WHEN dufs.guild_count >= 3 AND drc.discord_user_id IS NULL THEN 1
+					ELSE 2
+				END,
+				dufs.last_scan ASC
+			LIMIT 1
+			FOR UPDATE OF dufs SKIP LOCKED
+		`, sevenDaysAgo, before).Scan(ctx, &userID)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.NewUpdate().
+			Model((*types.DiscordUserFullScan)(nil)).
+			Set("last_scan = ?", now).
+			Where("user_id = ?", userID).
+			Exec(ctx)
+
+		return err
+	})
+	if err != nil {
+		// Check if no rows were found
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNoUsersNeedScanning
+		}
+
+		return nil, fmt.Errorf("failed to get user for full scan: %w", err)
+	}
+
+	return &userID, nil
 }
 
 // WhitelistDiscordUser adds a Discord user to the whitelist.

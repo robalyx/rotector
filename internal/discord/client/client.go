@@ -1,6 +1,8 @@
 package client
 
 import (
+	"errors"
+	"fmt"
 	"hash/fnv"
 	"net"
 	"net/http"
@@ -15,6 +17,12 @@ import (
 	"github.com/diamondburned/arikawa/v3/utils/handler"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/robalyx/rotector/internal/setup/config"
+)
+
+var (
+	ErrNoProxiesAvailable  = errors.New("no proxies available")
+	ErrInsufficientProxies = errors.New("insufficient proxies for token count")
 )
 
 // SelectProxyForToken deterministically selects a proxy for a given Discord token.
@@ -34,6 +42,61 @@ func SelectProxyForToken(token string, proxies []*url.URL) (*url.URL, int) {
 	index := int(hash % uint64(len(proxies)))
 
 	return proxies[index], index
+}
+
+// AssignUniqueProxies assigns unique proxies to tokens using round-robin distribution.
+// Returns a map of token to assigned proxy and proxy index, or an error if not enough proxies are available.
+func AssignUniqueProxies(tokens []string, proxies []*url.URL) (map[string]*url.URL, map[string]int, error) {
+	if len(proxies) == 0 {
+		return nil, nil, ErrNoProxiesAvailable
+	}
+
+	if len(tokens) > len(proxies) {
+		return nil, nil, fmt.Errorf("%w: %d tokens require %d proxies, but only %d available",
+			ErrInsufficientProxies, len(tokens), len(tokens), len(proxies))
+	}
+
+	assignments := make(map[string]*url.URL, len(tokens))
+	proxyIndices := make(map[string]int, len(tokens))
+
+	for i, token := range tokens {
+		index := i % len(proxies)
+		assignments[token] = proxies[index]
+		proxyIndices[token] = index
+	}
+
+	return assignments, proxyIndices, nil
+}
+
+// AssignProxiesToDiscordTokens collects all Discord tokens and assigns unique proxies to each.
+// Returns maps of token to assigned proxy and proxy index, or an error if not enough proxies are available.
+func AssignProxiesToDiscordTokens(
+	syncTokens []string,
+	verificationServiceA []config.VerificationServiceTokenConfig,
+	verificationServiceB []config.VerificationServiceTokenConfig,
+	proxies []*url.URL,
+) (proxyAssignments map[string]*url.URL, proxyIndices map[string]int, err error) {
+	// Collect all tokens
+	totalTokens := len(syncTokens) +
+		len(verificationServiceA) +
+		len(verificationServiceB)
+	allTokens := make([]string, 0, totalTokens)
+
+	allTokens = append(allTokens, syncTokens...)
+	for _, tokenConfig := range verificationServiceA {
+		allTokens = append(allTokens, tokenConfig.Token)
+	}
+
+	for _, tokenConfig := range verificationServiceB {
+		allTokens = append(allTokens, tokenConfig.Token)
+	}
+
+	// Assign unique proxies
+	if len(allTokens) > 0 && len(proxies) > 0 {
+		return AssignUniqueProxies(allTokens, proxies)
+	}
+
+	return nil, nil, nil
 }
 
 // NewHTTPClientWithProxy creates an HTTP client configured to use the specified proxy.
