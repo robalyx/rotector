@@ -217,27 +217,27 @@ func (c *chatCompletions) NewWithRetry(
 		}
 
 		// Auto-disable thinking mode on truncation
-		if errors.Is(lastErr, ErrResponseTruncated) && !triedWithoutThinking {
-			if extraFields := params.ExtraFields(); extraFields != nil {
-				if reasoning, ok := extraFields["reasoning"].(map[string]any); ok {
-					if enabled, ok := reasoning["enabled"].(bool); ok && enabled {
-						reasoning["enabled"] = false
-						triedWithoutThinking = true
+		if errors.Is(lastErr, ErrResponseTruncated) {
+			if !triedWithoutThinking {
+				if extraFields := params.ExtraFields(); extraFields != nil {
+					if reasoning, ok := extraFields["reasoning"].(map[string]any); ok {
+						if enabled, ok := reasoning["enabled"].(bool); ok && enabled {
+							reasoning["enabled"] = false
+							triedWithoutThinking = true
+							lastErr = nil
 
-						c.client.logger.Info("Response truncated, disabling thinking mode for retry",
-							zap.String("model", params.Model),
-							zap.Uint64("attempt", attempt))
+							c.client.logger.Info("Response truncated, disabling thinking mode for retry",
+								zap.String("model", params.Model),
+								zap.Uint64("attempt", attempt))
+						}
 					}
 				}
+			} else {
+				c.client.logger.Warn("Response still truncated after disabling thinking mode",
+					zap.String("model", params.Model))
+
+				return backoff.Permanent(lastErr)
 			}
-		}
-
-		// Check if still truncated after disabling thinking
-		if errors.Is(lastErr, ErrResponseTruncated) && triedWithoutThinking {
-			c.client.logger.Warn("Response still truncated after disabling thinking mode",
-				zap.String("model", params.Model))
-
-			return backoff.Permanent(lastErr)
 		}
 
 		attempt++
