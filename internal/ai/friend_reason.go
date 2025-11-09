@@ -10,14 +10,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alpkeskin/gotoon"
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
-	"github.com/tdewolff/minify/v2"
-	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
@@ -62,7 +61,6 @@ type BatchFriendAnalysis struct {
 // FriendReasonAnalyzer handles AI-based analysis of friend networks using OpenAI models.
 type FriendReasonAnalyzer struct {
 	chat          client.ChatCompletions
-	minify        *minify.M
 	analysisSem   *semaphore.Weighted
 	logger        *zap.Logger
 	textLogger    *zap.Logger
@@ -77,10 +75,6 @@ var FriendAnalysisSchema = utils.GenerateSchema[BatchFriendAnalysis]()
 
 // NewFriendReasonAnalyzer creates a FriendReasonAnalyzer.
 func NewFriendReasonAnalyzer(app *setup.App, logger *zap.Logger) *FriendReasonAnalyzer {
-	// Create a minifier for JSON optimization
-	m := minify.New()
-	m.AddFunc(ApplicationJSON, json.Minify)
-
 	// Get text logger
 	textLogger, textDir, err := app.LogManager.GetTextLogger("friend_reason_analyzer")
 	if err != nil {
@@ -90,7 +84,6 @@ func NewFriendReasonAnalyzer(app *setup.App, logger *zap.Logger) *FriendReasonAn
 
 	return &FriendReasonAnalyzer{
 		chat:          app.AIClient.Chat(),
-		minify:        m,
 		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendReasonAnalysis)),
 		logger:        logger.Named("ai_friend_reason"),
 		textLogger:    textLogger,
@@ -288,20 +281,14 @@ func (a *FriendReasonAnalyzer) processFriendBatch(ctx context.Context, batch []U
 		batchData[i] = req.UserData
 	}
 
-	// Convert to JSON for the AI request
-	batchDataJSON, err := sonic.Marshal(batchData)
+	// Convert to TOON format
+	toonData, err := gotoon.Encode(batchData)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
-	}
-
-	// Minify JSON to reduce token usage
-	batchDataJSON, err = a.minify.Bytes(ApplicationJSON, batchDataJSON)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
+		return nil, fmt.Errorf("TOON marshal error: %w", err)
 	}
 
 	// Configure prompt for friend analysis
-	prompt := fmt.Sprintf(FriendUserPrompt, string(batchDataJSON))
+	prompt := fmt.Sprintf(FriendUserPrompt, toonData)
 
 	// Prepare chat completion parameters
 	params := openai.ChatCompletionNewParams{

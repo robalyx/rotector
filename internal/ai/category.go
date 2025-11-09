@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/alpkeskin/gotoon"
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/ai/client"
@@ -14,8 +15,6 @@ import (
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
-	"github.com/tdewolff/minify/v2"
-	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
@@ -46,7 +45,6 @@ type CategoryAnalysisResult struct {
 // CategoryAnalyzer classifies flagged users into violation categories.
 type CategoryAnalyzer struct {
 	chat          client.ChatCompletions
-	minify        *minify.M
 	analysisSem   *semaphore.Weighted
 	logger        *zap.Logger
 	model         string
@@ -59,13 +57,8 @@ var CategoryAnalysisSchema = utils.GenerateSchema[CategoryAnalysisResult]()
 
 // NewCategoryAnalyzer creates a new CategoryAnalyzer.
 func NewCategoryAnalyzer(app *setup.App, logger *zap.Logger) *CategoryAnalyzer {
-	// Create a minifier for JSON optimization
-	m := minify.New()
-	m.AddFunc(ApplicationJSON, json.Minify)
-
 	return &CategoryAnalyzer{
 		chat:          app.AIClient.Chat(),
-		minify:        m,
 		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.CategoryAnalysis)),
 		logger:        logger.Named("ai_category"),
 		model:         app.Config.Common.OpenAI.CategoryModel,
@@ -210,20 +203,14 @@ func (a *CategoryAnalyzer) ClassifyUsers(
 
 // processCategoryBatch handles the AI analysis for a batch of users.
 func (a *CategoryAnalyzer) processCategoryBatch(ctx context.Context, batch []CategoryRequest) (*CategoryAnalysisResult, error) {
-	// Convert to JSON
-	reqJSON, err := sonic.Marshal(batch)
+	// Convert to TOON format
+	toonData, err := gotoon.Encode(batch)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
-	}
-
-	// Minify JSON to reduce token usage
-	reqJSON, err = a.minify.Bytes(ApplicationJSON, reqJSON)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
+		return nil, fmt.Errorf("TOON marshal error: %w", err)
 	}
 
 	// Prepare request prompt
-	requestPrompt := CategoryRequestPrompt + string(reqJSON)
+	requestPrompt := CategoryRequestPrompt + toonData
 
 	// Prepare chat completion parameters
 	params := openai.ChatCompletionNewParams{
