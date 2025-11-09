@@ -193,7 +193,7 @@ const (
 Only flag content that is SEXUALLY inappropriate or predatory. All guidelines below apply exclusively to sexual or predatory contexts. Do not flag content that is merely offensive, racist, discriminatory, violent, or disturbing unless explicitly combined with sexual or predatory elements.
 
 CRITICAL - CONTEXT REQUIREMENTS:
-All guidelines below apply ONLY to sexual, predatory, or grooming contexts. Ambiguous terms with innocent interpretationsmust NOT be flagged without explicit inappropriate context. Isolated terms require lower danger levels and corroborating evidence.
+All guidelines below apply ONLY to sexual, predatory, or grooming contexts. Ambiguous terms with innocent interpretations must NOT be flagged without explicit inappropriate context. Isolated terms require lower danger levels and corroborating evidence.
 
 CRITICAL - REQUIRE OBVIOUS VIOLATIONS:
 Do NOT make logical leaps or stretched interpretations. Violations must be CLEAR and UNAMBIGUOUS. If you have to explain multiple steps of reasoning to justify why something is inappropriate, it is NOT obvious enough to flag. Words with multiple meanings must have explicit sexual context to be flagged. The danger levels below are GUIDANCE so reduce the level if there are plausible innocent interpretations.
