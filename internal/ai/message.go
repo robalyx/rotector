@@ -8,15 +8,13 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/alpkeskin/gotoon"
 	"github.com/bytedance/sonic"
+	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
-	"github.com/tdewolff/minify/v2"
-	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
-
-	"github.com/openai/openai-go"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -44,7 +42,6 @@ type FlaggedMessageUser struct {
 // MessageAnalyzer processes Discord messages to detect inappropriate content.
 type MessageAnalyzer struct {
 	chat          client.ChatCompletions
-	minify        *minify.M
 	analysisSem   *semaphore.Weighted
 	logger        *zap.Logger
 	textLogger    *zap.Logger
@@ -58,9 +55,6 @@ var MessageAnalysisSchema = utils.GenerateSchema[FlaggedMessageUser]()
 
 // NewMessageAnalyzer creates a new message analyzer.
 func NewMessageAnalyzer(app *setup.App, logger *zap.Logger) *MessageAnalyzer {
-	m := minify.New()
-	m.AddFunc("application/json", json.Minify)
-
 	// Get text logger
 	textLogger, textDir, err := app.LogManager.GetTextLogger("message_analyzer")
 	if err != nil {
@@ -70,7 +64,6 @@ func NewMessageAnalyzer(app *setup.App, logger *zap.Logger) *MessageAnalyzer {
 
 	return &MessageAnalyzer{
 		chat:          app.AIClient.Chat(),
-		minify:        m,
 		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
 		logger:        logger.Named("ai_message"),
 		textLogger:    textLogger,
@@ -182,29 +175,14 @@ func (a *MessageAnalyzer) ProcessMessages(
 func (a *MessageAnalyzer) processMessageBatch(
 	ctx context.Context, batch []*MessageContent,
 ) (*FlaggedMessageUser, error) {
-	// Prepare message data for AI
-	type ConversationAnalysisRequest struct {
-		Messages []*MessageContent `json:"messages"`
-	}
-
-	request := ConversationAnalysisRequest{
-		Messages: batch,
-	}
-
-	// Convert to JSON
-	requestJSON, err := sonic.Marshal(request)
+	// Convert to TOON format
+	toonData, err := gotoon.Encode(batch)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Minify the JSON to reduce token usage
-	minifiedJSON, err := a.minify.Bytes("application/json", requestJSON)
-	if err != nil {
-		return nil, fmt.Errorf("failed to minify JSON: %w", err)
+		return nil, fmt.Errorf("TOON marshal error: %w", err)
 	}
 
 	// Format the prompt using the template
-	prompt := fmt.Sprintf(MessageAnalysisPrompt, minifiedJSON)
+	prompt := fmt.Sprintf(MessageAnalysisPrompt, toonData)
 
 	// Prepare chat completion parameters
 	params := openai.ChatCompletionNewParams{

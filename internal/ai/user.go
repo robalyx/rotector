@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alpkeskin/gotoon"
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/ai/client"
@@ -18,8 +19,6 @@ import (
 	"github.com/robalyx/rotector/internal/translator"
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/sourcegraph/conc/pool"
-	"github.com/tdewolff/minify/v2"
-	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
@@ -73,7 +72,6 @@ type FlaggedUser struct {
 // UserAnalyzer handles AI-based content analysis using OpenAI models.
 type UserAnalyzer struct {
 	chat          client.ChatCompletions
-	minify        *minify.M
 	translator    *translator.Translator
 	analysisSem   *semaphore.Weighted
 	logger        *zap.Logger
@@ -89,10 +87,6 @@ var UserAnalysisSchema = utils.GenerateSchema[FlaggedUsers]()
 
 // NewUserAnalyzer creates an UserAnalyzer.
 func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *zap.Logger) *UserAnalyzer {
-	// Create a minifier for JSON optimization
-	m := minify.New()
-	m.AddFunc(ApplicationJSON, json.Minify)
-
 	// Get text logger
 	textLogger, textDir, err := app.LogManager.GetTextLogger("user_analyzer")
 	if err != nil {
@@ -102,7 +96,6 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 
 	return &UserAnalyzer{
 		chat:          app.AIClient.Chat(),
-		minify:        m,
 		translator:    translator,
 		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
 		logger:        logger.Named("ai_user"),
@@ -217,20 +210,14 @@ func (a *UserAnalyzer) processUsersWithRetry(
 
 // processUserBatch handles the AI analysis for a batch of user summaries.
 func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary) (*FlaggedUsers, error) {
-	// Convert to JSON
-	userInfoJSON, err := sonic.Marshal(batch)
+	// Convert to TOON format
+	toonData, err := gotoon.Encode(batch)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
-	}
-
-	// Minify JSON to reduce token usage
-	userInfoJSON, err = a.minify.Bytes(ApplicationJSON, userInfoJSON)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
+		return nil, fmt.Errorf("TOON marshal error: %w", err)
 	}
 
 	// Prepare request prompt with user info
-	requestPrompt := UserRequestPrompt + string(userInfoJSON)
+	requestPrompt := UserRequestPrompt + toonData
 
 	// Prepare chat completion parameters
 	params := openai.ChatCompletionNewParams{

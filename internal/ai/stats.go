@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bytedance/sonic"
+	"github.com/alpkeskin/gotoon"
 	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
-	"github.com/tdewolff/minify/v2"
-	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
 )
 
@@ -23,7 +21,6 @@ type StatsData struct {
 // StatsAnalyzer analyzes statistics and generates welcome messages.
 type StatsAnalyzer struct {
 	chat          client.ChatCompletions
-	minify        *minify.M
 	logger        *zap.Logger
 	model         string
 	fallbackModel string
@@ -31,12 +28,8 @@ type StatsAnalyzer struct {
 
 // NewStatsAnalyzer creates a new stats analyzer instance.
 func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
-	m := minify.New()
-	m.AddFunc(ApplicationJSON, json.Minify)
-
 	return &StatsAnalyzer{
 		chat:          app.AIClient.Chat(),
-		minify:        m,
 		logger:        logger.Named("ai_stats"),
 		model:         app.Config.Common.OpenAI.StatsModel,
 		fallbackModel: app.Config.Common.OpenAI.StatsFallbackModel,
@@ -45,30 +38,18 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 
 // GenerateWelcomeMessage analyzes current and historical stats to generate a contextual welcome message.
 func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalStats []*types.HourlyStats) (string, error) {
-	// Format stats data for AI analysis
-	data := StatsData{
-		History: historicalStats,
-	}
-
-	// Convert stats to JSON
-	statsJSON, err := sonic.Marshal(data)
+	// Convert stats to TOON format
+	toonData, err := gotoon.Encode(historicalStats)
 	if err != nil {
 		a.logger.Error("failed to marshal stats data", zap.Error(err))
-		return "", fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
-	}
-
-	// Minify JSON to reduce token usage
-	statsJSON, err = a.minify.Bytes(ApplicationJSON, statsJSON)
-	if err != nil {
-		a.logger.Error("failed to minify stats data", zap.Error(err))
-		return "", fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
+		return "", fmt.Errorf("TOON marshal error: %w", err)
 	}
 
 	// Prepare chat completion parameters
 	params := openai.ChatCompletionNewParams{
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(StatsSystemPrompt),
-			openai.UserMessage(string(statsJSON)),
+			openai.UserMessage(toonData),
 		},
 		Model:               a.model,
 		Temperature:         openai.Float(0.5),
