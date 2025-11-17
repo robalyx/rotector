@@ -240,7 +240,7 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 		Model:               a.model,
 		Temperature:         openai.Float(0.0),
 		TopP:                openai.Float(0.2),
-		MaxCompletionTokens: openai.Int(8192),
+		MaxCompletionTokens: openai.Int(16384),
 		ReasoningEffort:     shared.ReasoningEffortMedium,
 	}
 
