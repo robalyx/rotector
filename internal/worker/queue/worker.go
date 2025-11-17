@@ -16,12 +16,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	MaxWaitTime       = 5 * time.Minute  // Maximum time to wait before processing
-	CheckInterval     = 10 * time.Second // How often to check conditions when waiting
-	MinBatchThreshold = 0.5              // Process when queue has at least 50% of batch size
-)
-
 // ErrNoUsersToProcess indicates that no users are available for processing.
 var ErrNoUsersToProcess = errors.New("no users available for processing")
 
@@ -37,14 +31,17 @@ type BatchData struct {
 
 // Worker processes queued users from Cloudflare D1.
 type Worker struct {
-	app             *setup.App
-	bar             *components.ProgressBar
-	userFetcher     *fetcher.UserFetcher
-	userChecker     *checker.UserChecker
-	reporter        *core.StatusReporter
-	logger          *zap.Logger
-	batchSize       int
-	lastProcessTime time.Time
+	app               *setup.App
+	bar               *components.ProgressBar
+	userFetcher       *fetcher.UserFetcher
+	userChecker       *checker.UserChecker
+	reporter          *core.StatusReporter
+	logger            *zap.Logger
+	batchSize         int
+	processedCount    int
+	windowStartTime   time.Time
+	maxUsersPerWindow int
+	windowDuration    time.Duration
 }
 
 // New creates a new queue worker.
@@ -54,13 +51,17 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 	reporter := core.NewStatusReporter(app.StatusClient, "queue", instanceID, logger)
 
 	return &Worker{
-		app:         app,
-		bar:         bar,
-		userFetcher: userFetcher,
-		userChecker: userChecker,
-		reporter:    reporter,
-		logger:      logger.Named("queue_worker"),
-		batchSize:   app.Config.Worker.BatchSizes.QueueItems,
+		app:               app,
+		bar:               bar,
+		userFetcher:       userFetcher,
+		userChecker:       userChecker,
+		reporter:          reporter,
+		logger:            logger.Named("queue_worker"),
+		batchSize:         app.Config.Worker.BatchSizes.QueueItems,
+		processedCount:    0,
+		windowStartTime:   time.Now(),
+		maxUsersPerWindow: app.Config.Worker.QueueRateLimiting.MaxUsersPerWindow,
+		windowDuration:    app.Config.Worker.QueueRateLimiting.WindowDuration,
 	}
 }
 
@@ -90,15 +91,15 @@ func (w *Worker) Start(ctx context.Context) {
 
 		w.bar.Reset()
 
-		// Check if we should process based on batching conditions
-		shouldProcess, sleepDuration := w.shouldProcessBatch(ctx)
-		if !shouldProcess {
-			w.bar.SetStepMessage("Waiting for batch conditions", 0)
-			w.logger.Debug("Waiting for batch conditions",
+		// Check if we can process based on rate limiting
+		canProcess, sleepDuration := w.canProcessBatch(w.batchSize)
+		if !canProcess {
+			w.bar.SetStepMessage("Waiting for rate limit", 0)
+			w.logger.Debug("Waiting for rate limit window",
 				zap.Duration("sleep_duration", sleepDuration))
 
 			if utils.ContextSleep(ctx, sleepDuration) == utils.SleepCancelled {
-				w.logger.Info("Context cancelled during wait, stopping queue worker")
+				w.logger.Info("Context cancelled during rate limit wait, stopping queue worker")
 				return
 			}
 
@@ -136,9 +137,6 @@ func (w *Worker) Start(ctx context.Context) {
 			continue
 		}
 
-		// Update last process time since we're about to process
-		w.lastProcessTime = time.Now()
-
 		// Step 2: Fetch user info (40%)
 		w.bar.SetStepMessage("Fetching user info", 40)
 		userInfos := w.userFetcher.FetchInfos(ctx, batchData.ProcessIDs)
@@ -171,6 +169,9 @@ func (w *Worker) Start(ctx context.Context) {
 			w.logger.Error("Failed to update IP tracking flagged status", zap.Error(err))
 		}
 
+		// Update processed count for rate limiting
+		w.processedCount += len(batchData.ProcessIDs)
+
 		w.logger.Info("Processed batch",
 			zap.Int("total", len(batchData.ProcessIDs)),
 			zap.Int("new", len(batchData.ProcessIDs)-len(batchData.ExistingUsers)),
@@ -178,45 +179,37 @@ func (w *Worker) Start(ctx context.Context) {
 	}
 }
 
-// shouldProcessBatch determines if we should process a batch based on queue size and timing conditions.
-func (w *Worker) shouldProcessBatch(ctx context.Context) (bool, time.Duration) {
-	// Check how much time has passed since last processing
-	timeSinceLastProcess := time.Since(w.lastProcessTime)
-	if timeSinceLastProcess >= MaxWaitTime {
-		w.logger.Debug("Processing due to time threshold",
-			zap.Duration("time_since_last_process", timeSinceLastProcess))
+// canProcessBatch checks if processing a batch would exceed rate limits.
+// Returns true if processing is allowed, or false with the required wait duration.
+func (w *Worker) canProcessBatch(batchSize int) (bool, time.Duration) {
+	now := time.Now()
 
-		return true, 0
+	// Reset window if expired
+	if now.Sub(w.windowStartTime) >= w.windowDuration {
+		w.processedCount = 0
+		w.windowStartTime = now
 	}
 
-	// Check queue stats to see how many items are available
-	stats, err := w.app.CFClient.Queue.GetStats(ctx)
-	if err != nil {
-		w.logger.Error("Failed to get queue stats, proceeding with processing", zap.Error(err))
-		return true, 0
+	// Check if processing this batch would exceed the limit
+	if w.processedCount+batchSize > w.maxUsersPerWindow {
+		waitUntil := w.windowStartTime.Add(w.windowDuration)
+		waitDuration := time.Until(waitUntil)
+
+		w.logger.Debug("Rate limit would be exceeded, waiting",
+			zap.Int("processed_count", w.processedCount),
+			zap.Int("batch_size", batchSize),
+			zap.Int("max_users_per_window", w.maxUsersPerWindow),
+			zap.Duration("wait_duration", waitDuration))
+
+		return false, waitDuration
 	}
 
-	minBatchSize := int(float64(w.batchSize) * MinBatchThreshold)
-	if stats.Unprocessed >= minBatchSize {
-		w.logger.Debug("Processing due to queue size threshold",
-			zap.Int("unprocessed", stats.Unprocessed),
-			zap.Int("min_batch_size", minBatchSize))
+	w.logger.Debug("Rate limit check passed",
+		zap.Int("processed_count", w.processedCount),
+		zap.Int("batch_size", batchSize),
+		zap.Int("max_users_per_window", w.maxUsersPerWindow))
 
-		return true, 0
-	}
-
-	// Calculate remaining wait time
-	remainingWaitTime := MaxWaitTime - timeSinceLastProcess
-	nextCheckTime := min(CheckInterval, remainingWaitTime)
-
-	w.logger.Debug("Batch conditions not met, waiting",
-		zap.Int("unprocessed", stats.Unprocessed),
-		zap.Int("min_batch_size", minBatchSize),
-		zap.Duration("time_since_last_process", timeSinceLastProcess),
-		zap.Duration("remaining_wait_time", remainingWaitTime),
-		zap.Duration("next_check_in", nextCheckTime))
-
-	return false, nextCheckTime
+	return true, 0
 }
 
 // updateIPTrackingFlaggedStatus updates the queue_ip_tracking table for processed users.

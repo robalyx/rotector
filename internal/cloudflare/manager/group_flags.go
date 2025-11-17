@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/bytedance/sonic"
 	"github.com/robalyx/rotector/internal/cloudflare/api"
@@ -78,6 +79,53 @@ func (g *GroupFlags) Remove(ctx context.Context, groupID int64) error {
 	return nil
 }
 
+// UpdateBanStatus updates the is_banned field for groups in the group_flags table.
+func (g *GroupFlags) UpdateBanStatus(ctx context.Context, groupIDs []int64, isBanned bool) error {
+	if len(groupIDs) == 0 {
+		return nil
+	}
+
+	// Build query to update is_banned
+	query := "UPDATE group_flags SET is_banned = ? WHERE group_id IN ("
+	params := make([]any, 0, len(groupIDs)+1)
+
+	// Add the banned status as first parameter
+	if isBanned {
+		params = append(params, 1)
+	} else {
+		params = append(params, 0)
+	}
+
+	// Add placeholders for WHERE clause
+	var whereInPlaceholders strings.Builder
+
+	for i, groupID := range groupIDs {
+		if i > 0 {
+			whereInPlaceholders.WriteString(",")
+		}
+
+		whereInPlaceholders.WriteString("?")
+
+		params = append(params, groupID)
+	}
+
+	query += whereInPlaceholders.String()
+
+	query += ")"
+
+	result, err := g.d1.ExecuteSQL(ctx, query, params)
+	if err != nil {
+		return fmt.Errorf("failed to update group ban status: %w", err)
+	}
+
+	g.logger.Debug("Updated group ban status in group_flags table",
+		zap.Int("groups_processed", len(groupIDs)),
+		zap.Bool("is_banned", isBanned),
+		zap.Int("rows_affected", len(result)))
+
+	return nil
+}
+
 // addGroup is a helper method that inserts or updates a group with the specified flag type.
 func (g *GroupFlags) addGroup(ctx context.Context, group *types.ReviewGroup, flagType int) error {
 	// Prepare reasons JSON
@@ -103,17 +151,24 @@ func (g *GroupFlags) addGroup(ctx context.Context, group *types.ReviewGroup, fla
 
 	sqlStmt := `
 		INSERT OR REPLACE INTO group_flags (
-			group_id, 
-			flag_type, 
-			confidence, 
-			reasons
-		) VALUES (?, ?, ?, ?)`
+			group_id,
+			flag_type,
+			confidence,
+			reasons,
+			is_banned
+		) VALUES (?, ?, ?, ?, ?)`
+
+	isBanned := 0
+	if group.IsLocked {
+		isBanned = 1
+	}
 
 	params := []any{
 		group.ID,
 		flagType,
 		group.Confidence,
 		reasonsJSON,
+		isBanned,
 	}
 
 	_, err := g.d1.ExecuteSQL(ctx, sqlStmt, params)

@@ -39,7 +39,7 @@ type OutfitThemeSummary struct {
 // UserOutfitData represents the data for a user's outfit violations.
 type UserOutfitData struct {
 	Username string               `json:"username" jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
-	Themes   []OutfitThemeSummary `json:"themes"   jsonschema:"required,maxItems=20,description=List of outfit themes detected for this user"`
+	Themes   []OutfitThemeSummary `json:"themes"   jsonschema:"required,description=List of outfit themes detected for this user"`
 }
 
 // UserOutfitRequest contains the user data and outfit violations for analysis.
@@ -56,7 +56,7 @@ type OutfitAnalysis struct {
 
 // BatchOutfitAnalysis contains results for multiple users' outfit violations.
 type BatchOutfitAnalysis struct {
-	Results []OutfitAnalysis `json:"results" jsonschema:"required,maxItems=50,description=Array of outfit violation analyses for each user"`
+	Results []OutfitAnalysis `json:"results" jsonschema:"required,description=Array of outfit violation analyses for each user"`
 }
 
 // OutfitReasonAnalyzer handles AI-based analysis of outfit violations using OpenAI models.
@@ -339,13 +339,11 @@ func (a *OutfitReasonAnalyzer) processOutfitBatch(ctx context.Context, batch []U
 				},
 			},
 		},
-		Model:       a.model,
-		Temperature: openai.Float(0.0),
-		TopP:        openai.Float(0.4),
+		Model:               a.model,
+		Temperature:         openai.Float(0.0),
+		TopP:                openai.Float(0.4),
+		MaxCompletionTokens: openai.Int(8192),
 	}
-
-	// Configure extra fields for model
-	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).Build())
 
 	// Make API request
 	var result BatchOutfitAnalysis

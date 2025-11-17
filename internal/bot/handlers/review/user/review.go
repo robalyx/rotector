@@ -110,6 +110,7 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Check friend status and get friend data by looking up each friend in the database
 	var flaggedFriends map[int64]*types.ReviewUser
+
 	if len(user.Friends) > 0 {
 		// Extract friend IDs for batch lookup
 		friendIDs := make([]int64, len(user.Friends))
@@ -133,6 +134,7 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Check group status
 	var flaggedGroups map[int64]*types.ReviewGroup
+
 	if len(user.Groups) > 0 {
 		// Extract group IDs for batch lookup
 		groupIDs := make([]int64, len(user.Groups))
@@ -986,13 +988,6 @@ func (m *ReviewMenu) handleGenerateProfileReason(ctx *interaction.Context) {
 				WithPlaceholder("username\ndisplayName\ndescription"),
 		).
 		AddLabel(
-			"Language Pattern",
-			discord.NewTextInput(constants.ProfileReasonLanguageInputCustomID, discord.TextInputStyleParagraph).
-				WithRequired(false).
-				WithMaxLength(512).
-				WithPlaceholder("imperative\neuphemistic\ncoded\ndirect-address\noffer-pattern"),
-		).
-		AddLabel(
 			"Language Used",
 			discord.NewTextInput(constants.ProfileReasonLanguageUsedInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(false).
@@ -1016,7 +1011,6 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	data := ctx.Event().ModalData()
 	hint := data.Text(constants.ProfileReasonHintInputCustomID)
 	flaggedFieldsText := data.Text(constants.ProfileReasonFlaggedFieldsInputCustomID)
-	languagePatternText := data.Text(constants.ProfileReasonLanguageInputCustomID)
 	languageUsedText := data.Text(constants.ProfileReasonLanguageUsedInputCustomID)
 
 	// Validate required fields
@@ -1027,8 +1021,20 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 
 	// Parse input fields
 	flaggedFields := utils.ParseDelimitedInput(flaggedFieldsText, "\n")
-	languagePattern := utils.ParseDelimitedInput(languagePatternText, "\n")
-	languageUsed := utils.ParseDelimitedInput(languageUsedText, "\n")
+
+	// Convert flagged fields to boolean flags
+	var hasUsernameViolation, hasDisplayNameViolation, hasDescriptionViolation bool
+
+	for _, field := range flaggedFields {
+		switch field {
+		case "username":
+			hasUsernameViolation = true
+		case "displayName":
+			hasDisplayNameViolation = true
+		case "description":
+			hasDescriptionViolation = true
+		}
+	}
 
 	// Show loading message
 	ctx.Clear("Generating profile reason using AI... This may take a few moments.")
@@ -1054,13 +1060,14 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	// Create user reason request
 	userReasonRequest := map[int64]ai.UserReasonRequest{
 		user.ID: {
-			User:            userSummary,
-			Confidence:      1.0,
-			Hint:            hint,
-			FlaggedFields:   flaggedFields,
-			LanguagePattern: languagePattern,
-			LanguageUsed:    languageUsed,
-			UserID:          user.ID,
+			User:                    userSummary,
+			Confidence:              1.0,
+			Hint:                    hint,
+			HasUsernameViolation:    hasUsernameViolation,
+			HasDisplayNameViolation: hasDisplayNameViolation,
+			HasDescriptionViolation: hasDescriptionViolation,
+			LanguageUsed:            languageUsedText,
+			UserID:                  user.ID,
 		},
 	}
 

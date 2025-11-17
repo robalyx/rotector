@@ -125,7 +125,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		eventHandler.Setup()
 
 		// Create rate limiter
-		rateLimiter := rate.New(1200*time.Millisecond, 200*time.Millisecond)
+		rateLimiter := rate.New(1500*time.Millisecond, 200*time.Millisecond)
 
 		// Create scanner for this account
 		scannerID := fmt.Sprintf("scanner_%d", i)

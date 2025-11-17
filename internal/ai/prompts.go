@@ -45,6 +45,7 @@ Key instructions:
 11. Additionally, you MUST set 'hasFurryTheme' to true if ANY outfit contains furry, anthropomorphic animal, or fursona themes (full fursuits, animal ears, tails, paws, etc.), regardless of whether they are appropriate or inappropriate
 12. IMPORTANT: The 'hasFurryTheme' field is for metadata tracking ONLY and has NO EFFECT on whether outfits should be flagged in the 'themes' array - continue to only flag inappropriate themes as defined above
 13. Examine all visible text on clothing and accessories - translate any non-English text and evaluate it against the violation guidelines
+14. Use outfit names as context clues when interpreting ambiguous visual elements but names alone do not justify flagging
 
 CRITICAL: Pay special attention to textures, patterns, and visual effects that may simulate nudity. ANY texture applied directly to a bare avatar body with FLESH TONES or SKIN COLORS (wood, stone, brick, etc. on skin-colored bodies) represents nudity and should be flagged. However, do NOT flag wood/stone/brick textures when used as part of intentional non-human character designs where the entire body is clearly meant to be that material (e.g., tree characters, stick figures, golem characters)
 
@@ -193,10 +194,10 @@ const (
 Only flag content that is SEXUALLY inappropriate or predatory. All guidelines below apply exclusively to sexual or predatory contexts. Do not flag content that is merely offensive, racist, discriminatory, violent, or disturbing unless explicitly combined with sexual or predatory elements.
 
 CRITICAL - CONTEXT REQUIREMENTS:
-All guidelines below apply ONLY to sexual, predatory, or grooming contexts. Ambiguous terms with innocent interpretations must NOT be flagged without explicit inappropriate context. Isolated terms require lower danger levels and corroborating evidence.
+All guidelines below apply ONLY to sexual, predatory, or grooming contexts. Ambiguous terms with plausible innocent interpretations must NOT be flagged without explicit inappropriate context. However, phrases with ONLY sexual interpretations should be flagged even without additional context. Isolated terms require lower danger levels and corroborating evidence.
 
 CRITICAL - REQUIRE OBVIOUS VIOLATIONS:
-Do NOT make logical leaps or stretched interpretations. Violations must be CLEAR and UNAMBIGUOUS. If you have to explain multiple steps of reasoning to justify why something is inappropriate, it is NOT obvious enough to flag. Words with multiple meanings must have explicit sexual context to be flagged. The danger levels below are GUIDANCE so reduce the level if there are plausible innocent interpretations.
+Do NOT make logical leaps or stretched interpretations. Violations must be CLEAR and UNAMBIGUOUS. If you have to explain multiple steps of reasoning to justify why something is inappropriate, it is NOT obvious enough to flag. However, well-known euphemisms that are commonly understood in sexual contexts (e.g., "longerthanhis", "buscon") should be flagged even if they require one step of interpretation. Words with multiple meanings must have explicit sexual context to be flagged. The danger levels below are GUIDANCE so reduce the level if there are plausible innocent interpretations.
 
 1. Exploitation Indicators:
 - Seeking private interactions with predatory intentions ("message me first", "dm first", "add for fun") [DANGER LEVEL 4-5]
@@ -242,12 +243,14 @@ Do NOT make logical leaps or stretched interpretations. Violations must be CLEAR
 - Fetish references: fart/gas/smell [DANGER LEVEL 4], inflation/blueberry transformation [DANGER LEVEL 4], giantess/giant [DANGER LEVEL 4], hypnosis/hypno with explicit terms [DANGER LEVEL 5], other fetishes [DANGER LEVEL 3]
 - Adult community references [DANGER LEVEL 3]
 - Suggestive size references [DANGER LEVEL 3]
+- Sexual size comparisons and anatomical measurements using pronouns (size-related boasting with body part references) [DANGER LEVEL 3-4]
 - Self-descriptive terms with sexual or deviant connotations [DANGER LEVEL 4]
 
 5. Technical Evasion:
 - Caesar cipher (ROT13 and other rotations) - decode suspicious strings [DANGER LEVEL 4]
 - Deliberately misspelled inappropriate terms with no innocent interpretation [DANGER LEVEL 3]
 - Leetspeak/number bypasses spelling inappropriate terms (e.g., "z63n" for sex, "h3nt41" for hentai) [DANGER LEVEL 4]
+- Visually similar character substitution to spell inappropriate terms (e.g., uppercase 'I' for lowercase 'l', '0' for 'O') [DANGER LEVEL 4]
 - Specific bypasses: "futa"/"fmta"/"fmt" [DANGER LEVEL 4], "les" used inappropriately [DANGER LEVEL 3], "femmb" (femboy) used inappropriately [DANGER LEVEL 3]
 - References to "MAP" (Minor Attracted Person - pedophile identification term) [DANGER LEVEL 5]
 - Warnings or anti-predator messages combined with predatory indicators (manipulation tactic) [DANGER LEVEL 4]
@@ -324,9 +327,10 @@ Output format:
       "hint": "Brief, clinical hint about the type of concern identified",    // Set to "NO_VIOLATIONS" if only hasSocials=true
       "confidence": 0.0-1.0,
       "hasSocials": true/false,
-      "flaggedFields": ["field1", "field2"],
-      "languagePattern": ["pattern1", "pattern2"],
-      "languageUsed": ["english", "spanish", "morse", "rot13"]
+      "hasUsernameViolation": true/false,
+      "hasDisplayNameViolation": true/false,
+      "hasDescriptionViolation": true/false,
+      "languageUsed": "english"
     }
   ]
 }
@@ -339,8 +343,10 @@ Key instructions:
 5. Sharing of social media links is not a violation of Roblox's rules but we should set 'hasSocials' to true
 6. If a user has no violations but has social media links, you MUST only include the 'name' and 'hasSocials' fields for that user
 7. You MUST check usernames and display names even if the description is empty as the name itself can be sufficient evidence
-8. Set 'languageUsed' to identify the actual language(s) or encoding methods detected in the content
-9. Always include at least one entry in 'languageUsed' when flagging violations - include "english" for standard English content
+8. Evaluate each field independently (username, display name, description) - a violation in ANY field is sufficient to flag, even if other fields are innocent
+9. Display names should be analyzed for violations independently without requiring corroborating evidence from other fields
+10. Set 'languageUsed' to identify the primary language or encoding method detected in the content (single value only)
+11. Always set 'languageUsed' when flagging violations - use "english" for standard English content
 
 CRITICAL HINT RESTRICTIONS:
 - Your hint should help identify the category of violation without containing inappropriate language itself
@@ -350,19 +356,10 @@ CRITICAL HINT RESTRICTIONS:
 - Keep hints under 50 characters when possible
 - Use coded/clinical terminology: "solicitation patterns", "grooming indicators", "authority misuse"
 
-FlaggedFields options (profile fields containing violations):
-- "username" - Violation in the username itself
-- "displayName" - Violation in the display name
-- "description" - Violation in the profile description
-
-LanguagePattern options:
-- "imperative" - Command-style language
-- "conditional" - If-then style propositions
-- "euphemistic" - Indirect/euphemistic language
-- "coded" - Coded communication
-- "direct-address" - Direct targeting language
-- "question-pattern" - Leading questions
-- "offer-pattern" - Offering something inappropriate
+Violation Field Flags (set to true if the corresponding field contains violations):
+- hasUsernameViolation - Violation in the username itself
+- hasDisplayNameViolation - Violation in the display name
+- hasDescriptionViolation - Violation in the profile description
 
 LanguageUsed options (specify the actual language or encoding detected):
 - Use the standard language name for any natural language (e.g., "english", "spanish", "mandarin", etc.)
@@ -432,10 +429,9 @@ DO NOT flag for:
 - Gender identity expression (including terms like femboy, tomboy, etc. without sexual/fetish context)
 - Expressions of preference for gender identities or aesthetics without sexual context (e.g., "I love emo")
 - Bypass of appropriate terms
-- Dance, movement, or physical activity references without explicit sexual context
 - Foreign language content without clear sexual/predatory meaning
 - Foreign language translations that require multiple interpretive steps or questionable parsing
-- Incomplete text or phrases that could complete to innocent words
+- Incomplete text or phrases that could complete to innocent words (except incomplete sexual phrases where the completion is unambiguous)
 - Statements about being popular, liked, or desired without explicit sexual solicitation
 - Self-descriptions about attractiveness or popularity without predatory targeting
 - Scrambled/coded text that doesn't clearly spell inappropriate terms
@@ -754,7 +750,8 @@ Pattern analysis guidance:
 - Assess violation density relative to network size and identify behavioral implications
 - Consider whether patterns suggest coordinated behavior, specialized networks, or evasion tactics
 - Focus on the actual inappropriate content and behaviors mentioned in the reasons
-- Identify concerning trends in the types of users this account chooses to befriend`
+- Identify concerning trends in the types of users this account chooses to befriend
+- When possibleVictim is true, consider that this user may be a victim who was targeted or groomed by inappropriate accounts`
 
 	// FriendUserPrompt is the prompt for analyzing multiple users' friend networks.
 	FriendUserPrompt = `Analyze these friend networks for predatory behavior patterns.
@@ -804,7 +801,8 @@ Pattern analysis guidance:
 - Assess violation density relative to group memberships and identify behavioral implications
 - Consider whether patterns suggest coordinated behavior, specialized communities, or evasion tactics
 - Focus on the actual inappropriate content and behaviors mentioned in the reasons
-- Identify concerning trends in the types of groups this account chooses to join`
+- Identify concerning trends in the types of groups this account chooses to join
+- When possibleVictim is true, consider that this user may be a victim who was recruited or targeted by inappropriate communities`
 
 	// GroupUserPrompt is the prompt for analyzing multiple users' group memberships.
 	GroupUserPrompt = `Analyze these group membership patterns for predatory behavior indicators.

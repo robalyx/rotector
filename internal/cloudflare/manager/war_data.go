@@ -450,6 +450,7 @@ func (w *WarData) getMajorOrders(ctx context.Context) ([]MajorOrder, error) {
 		}
 
 		var completedAt *time.Time
+
 		if row["completed_at"] != nil {
 			t, err := time.Parse("2006-01-02 15:04:05", row["completed_at"].(string))
 			if err != nil {
@@ -523,6 +524,7 @@ func (w *WarData) getZoneLiberationHistory(ctx context.Context, zoneID int64) ([
 
 	// Group by date and take most recent value per day
 	dateMap := make(map[string]float64)
+
 	for _, row := range results {
 		recordedAt, err := time.Parse("2006-01-02 15:04:05", row["recorded_at"].(string))
 		if err != nil {

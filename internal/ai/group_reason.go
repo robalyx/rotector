@@ -15,6 +15,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
@@ -32,13 +33,14 @@ const (
 type GroupSummary struct {
 	Name    string             `json:"name"    jsonschema:"required,minLength=1,description=Name of the group"`
 	Type    string             `json:"type"    jsonschema:"required,enum=Confirmed,enum=Flagged,enum=Mixed,description=Type of group (Confirmed or Flagged or Mixed)"`
-	Reasons []types.ReasonInfo `json:"reasons" jsonschema:"required,maxItems=20,description=List of reasons with types and messages why this group was flagged"`
+	Reasons []types.ReasonInfo `json:"reasons" jsonschema:"required,description=List of reasons with types and messages why this group was flagged"`
 }
 
 // UserGroupData represents the data for a user's group memberships.
 type UserGroupData struct {
-	Username string         `json:"username" jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
-	Groups   []GroupSummary `json:"groups"   jsonschema:"required,maxItems=100,description=List of groups and their violation data"`
+	Username       string         `json:"username"       jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Groups         []GroupSummary `json:"groups"         jsonschema:"required,description=List of groups and their violation data"`
+	PossibleVictim bool           `json:"possibleVictim" jsonschema:"description=True if this user may be a victim who was recruited or targeted"`
 }
 
 // UserGroupRequest contains the user data and group memberships for analysis.
@@ -55,7 +57,7 @@ type GroupAnalysis struct {
 
 // BatchGroupAnalysis contains results for multiple users' group memberships.
 type BatchGroupAnalysis struct {
-	Results []GroupAnalysis `json:"results" jsonschema:"required,maxItems=50,description=Array of group membership analyses for each user"`
+	Results []GroupAnalysis `json:"results" jsonschema:"required,description=Array of group membership analyses for each user"`
 }
 
 // GroupReasonAnalyzer handles AI-based analysis of group memberships using OpenAI models.
@@ -153,8 +155,9 @@ func (a *GroupReasonAnalyzer) GenerateGroupReasons(
 		groupRequests[userInfo.ID] = UserGroupRequest{
 			UserInfo: userInfo,
 			UserData: UserGroupData{
-				Username: userInfo.Name,
-				Groups:   groupSummaries,
+				Username:       userInfo.Name,
+				Groups:         groupSummaries,
+				PossibleVictim: userInfo.Status == enum.UserTypeMixed,
 			},
 		}
 	}
@@ -321,13 +324,11 @@ func (a *GroupReasonAnalyzer) processGroupBatch(ctx context.Context, batch []Use
 				},
 			},
 		},
-		Model:       a.model,
-		Temperature: openai.Float(0.0),
-		TopP:        openai.Float(0.4),
+		Model:               a.model,
+		Temperature:         openai.Float(0.0),
+		TopP:                openai.Float(0.4),
+		MaxCompletionTokens: openai.Int(8192),
 	}
-
-	// Configure extra fields for model
-	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).Build())
 
 	// Make API request
 	var result BatchGroupAnalysis

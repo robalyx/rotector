@@ -34,6 +34,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Add CAPTCHA image if available
 	if b.imgBuffer != nil {
 		builder.AddFiles(discord.NewFile("captcha.png", "", b.imgBuffer))
+
 		components = append(components,
 			discord.NewMediaGallery(discord.MediaGalleryItem{
 				Media: discord.UnfurledMediaItem{

@@ -217,6 +217,7 @@ func (m *ScanMenu) applyFilters(s *session.Session) {
 
 	// Apply filters to each user
 	filteredUsers := make(map[uint64][]*types.UserGuildInfo)
+
 	for userID, guilds := range userGuilds {
 		// Filter guilds by join duration
 		var filteredGuilds []*types.UserGuildInfo

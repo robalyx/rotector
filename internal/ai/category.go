@@ -39,7 +39,7 @@ type CategoryResponse struct {
 
 // CategoryAnalysisResult contains the analysis results for a batch of users.
 type CategoryAnalysisResult struct {
-	Results []CategoryResponse `json:"results" jsonschema:"required,maxItems=50,description=List of user category classifications"`
+	Results []CategoryResponse `json:"results" jsonschema:"required,description=List of user category classifications"`
 }
 
 // CategoryAnalyzer classifies flagged users into violation categories.
@@ -228,13 +228,11 @@ func (a *CategoryAnalyzer) processCategoryBatch(ctx context.Context, batch []Cat
 				},
 			},
 		},
-		Model:       a.model,
-		Temperature: openai.Float(0.0),
-		TopP:        openai.Float(0.2),
+		Model:               a.model,
+		Temperature:         openai.Float(0.0),
+		TopP:                openai.Float(0.2),
+		MaxCompletionTokens: openai.Int(8192),
 	}
-
-	// Configure extra fields for model
-	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).Build())
 
 	// Make API request
 	var result CategoryAnalysisResult

@@ -145,6 +145,7 @@ func (b *ChartBuilder) prepareUserDataSeries() ([]float64, []float64, []float64,
 
 	// Create a map of truncated timestamps to stats for lookup
 	statsMap := make(map[time.Time]*types.HourlyStats)
+
 	for _, stat := range b.stats {
 		truncatedTime := stat.Timestamp.Truncate(time.Hour)
 		statsMap[truncatedTime] = stat
@@ -179,6 +180,7 @@ func (b *ChartBuilder) prepareGroupDataSeries() ([]float64, []float64, []float64
 
 	// Create a map of truncated timestamps to stats for lookup
 	statsMap := make(map[time.Time]*types.HourlyStats)
+
 	for _, stat := range b.stats {
 		truncatedTime := stat.Timestamp.Truncate(time.Hour)
 		statsMap[truncatedTime] = stat

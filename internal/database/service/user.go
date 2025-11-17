@@ -269,6 +269,7 @@ func (s *UserService) GetUserToReview(
 
 	// Determine target status based on mode
 	var targetStatus enum.UserType
+
 	switch targetMode {
 	case enum.ReviewTargetModeFlagged:
 		targetStatus = enum.UserTypeFlagged
@@ -284,6 +285,7 @@ func (s *UserService) GetUserToReview(
 		if errors.Is(err, types.ErrNoUsersToReview) {
 			// If no users found with primary status, try other statuses in order
 			var fallbackStatuses []enum.UserType
+
 			switch targetMode {
 			case enum.ReviewTargetModeFlagged:
 				fallbackStatuses = []enum.UserType{enum.UserTypeConfirmed, enum.UserTypeCleared}
@@ -544,16 +546,29 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[int64]*types.Revi
 				user.EngineVersion = existingUser.EngineVersion
 			}
 
-			// Past offenders who get flagged again should return to flagged status
-			if existingUser.Status == enum.UserTypePastOffender && len(user.Reasons) > 0 {
-				user.Status = enum.UserTypeFlagged
-			} else {
-				// Keep existing status for already flagged/confirmed users
+			// Handle status transitions
+			switch {
+			case existingUser.Status == enum.UserTypeConfirmed || existingUser.Status == enum.UserTypeCleared:
+				// Never downgrade confirmed or cleared users - preserve their status
 				user.Status = existingUser.Status
+			case existingUser.Status == enum.UserTypePastOffender && len(user.Reasons) > 0:
+				// Past offenders who get flagged again, upgrade from PastOffender
+				if user.Status == enum.UserTypeCleared {
+					user.Status = enum.UserTypeFlagged
+				}
+			case user.Status == enum.UserTypeCleared:
+				// If status wasn't explicitly set by checkers (still cleared), preserve existing
+				user.Status = existingUser.Status
+			default:
+				// Respect the status set by the checkers (Mixed or Flagged)
+				// This allows mixed users to upgrade to flagged, or flagged to downgrade to mixed
 			}
 		} else {
-			// New users start as flagged and current engine version
-			user.Status = enum.UserTypeFlagged
+			// New users to default to flagged if status wasn't set by checkers
+			if user.Status == enum.UserTypeCleared {
+				user.Status = enum.UserTypeFlagged
+			}
+
 			if user.EngineVersion == "" {
 				user.EngineVersion = types.CurrentEngineVersion
 			}

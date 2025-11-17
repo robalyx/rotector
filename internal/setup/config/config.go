@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/knadh/koanf/parsers/toml/v2"
 	"github.com/knadh/koanf/providers/file"
@@ -101,6 +102,8 @@ type WorkerConfig struct {
 	ThresholdLimits ThresholdLimits `koanf:"threshold_limits"`
 	// Cloudflare configuration
 	Cloudflare CloudflareConfig `koanf:"cloudflare"`
+	// Queue worker rate limiting configuration
+	QueueRateLimiting QueueRateLimitingConfig `koanf:"queue_rate_limiting"`
 }
 
 // CloudflareConfig contains Cloudflare D1 and R2 configuration.
@@ -129,6 +132,14 @@ type CloudflareConfig struct {
 	UploadAPIBase string `koanf:"upload_api_base"`
 	// Upload admin API token (different from D1/R2 API token)
 	UploadAdminToken string `koanf:"upload_admin_token"`
+}
+
+// QueueRateLimitingConfig contains rate limiting configuration for queue worker.
+type QueueRateLimitingConfig struct {
+	// Maximum number of users to process per time window.
+	MaxUsersPerWindow int `koanf:"max_users_per_window"`
+	// Time window duration for rate limiting.
+	WindowDuration time.Duration `koanf:"window_duration"`
 }
 
 // Debug contains debug-related configuration.
@@ -213,8 +224,10 @@ type ModelPricing struct {
 type OpenAI struct {
 	// Base URL for the API
 	BaseURL string `koanf:"base_url"`
-	// API key for authentication
-	APIKey string `koanf:"api_key"`
+	// Username for HTTP Basic Auth
+	Username string `koanf:"username"`
+	// Password for HTTP Basic Auth
+	Password string `koanf:"password"`
 	// Maximum concurrent requests
 	MaxConcurrent int64 `koanf:"max_concurrent"`
 	// Model name mappings

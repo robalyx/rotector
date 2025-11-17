@@ -185,26 +185,11 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 	// Remove friend-only flags for furry users to prevent false positive cascade
 	c.removeFurryUserFriendOnlyFlags(reasonsMap, furryUsers)
 
-	// Detect past offenders - users who were previously flagged/confirmed but now have no violations
-	pastOffenderIDs := make([]int64, 0)
+	// Set user status based on aggregated reasons
+	c.setUserStatuses(params.Users, reasonsMap, params.InappropriateFriendsFlags, params.InappropriateGroupsFlags)
 
-	for _, user := range params.Users {
-		if _, hasReasons := reasonsMap[user.ID]; !hasReasons {
-			if existingUser, exists := params.ExistingUsers[user.ID]; exists {
-				if existingUser.Status == enum.UserTypeFlagged || existingUser.Status == enum.UserTypeConfirmed {
-					// User has no reasons after processing
-					// They were previously flagged/confirmed, they became clean (past offender)
-					pastOffenderIDs = append(pastOffenderIDs, user.ID)
-					c.logger.Info("User became clean, will update to past offender",
-						zap.Int64("userID", user.ID),
-						zap.String("previousStatus", existingUser.Status.String()))
-				}
-			}
-		}
-	}
-
-	// Update past offenders
-	c.handlePastOffenders(ctx, pastOffenderIDs)
+	// Detect and update past offenders
+	c.handlePastOffenders(ctx, params.Users, params.ExistingUsers, reasonsMap)
 
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {
@@ -367,6 +352,60 @@ func (c *UserChecker) removeFurryUserFriendOnlyFlags(
 	}
 }
 
+// setUserStatuses determines user status based on individual reason thresholds.
+func (c *UserChecker) setUserStatuses(
+	users []*types.ReviewUser, reasonsMap map[int64]types.Reasons[enum.UserReasonType],
+	inappropriateFriendsFlags map[int64]struct{}, inappropriateGroupsFlags map[int64]struct{},
+) {
+	for _, user := range users {
+		reasons, hasReasons := reasonsMap[user.ID]
+		if !hasReasons {
+			// No reasons means keep Cleared status
+			continue
+		}
+
+		// Set outfit-only users to Mixed status
+		hasOnlyOutfitReason := len(reasons) == 1 && reasons[enum.UserReasonTypeOutfit] != nil
+		if hasOnlyOutfitReason {
+			user.Status = enum.UserTypeMixed
+			continue
+		}
+
+		// Check if any reason meets its individual threshold
+		shouldBeFlagged := false
+
+		for reasonType, reason := range reasons {
+			threshold := 0.50
+
+			// Apply thresholds based on reason type
+			switch reasonType {
+			case enum.UserReasonTypeCondo:
+				threshold = 0.85 // Requires 3+ servers or 3+ groups
+			case enum.UserReasonTypeFriend:
+				if _, hasEnhancement := inappropriateFriendsFlags[user.ID]; hasEnhancement {
+					threshold = 0.40
+				}
+			case enum.UserReasonTypeGroup:
+				if _, hasEnhancement := inappropriateGroupsFlags[user.ID]; hasEnhancement {
+					threshold = 0.40
+				}
+			default:
+			}
+
+			if reason.Confidence >= threshold {
+				shouldBeFlagged = true
+				break
+			}
+		}
+
+		if shouldBeFlagged {
+			user.Status = enum.UserTypeFlagged
+		} else {
+			user.Status = enum.UserTypeMixed
+		}
+	}
+}
+
 // classifyFlaggedUsers classifies users into violation categories.
 func (c *UserChecker) classifyFlaggedUsers(ctx context.Context, flaggedUsers map[int64]*types.ReviewUser) {
 	if len(flaggedUsers) == 0 {
@@ -393,12 +432,40 @@ func (c *UserChecker) classifyFlaggedUsers(ctx context.Context, flaggedUsers map
 		zap.Int("classified", len(categoryResults)))
 }
 
-// handlePastOffenders updates users who became clean to past offender status.
-func (c *UserChecker) handlePastOffenders(ctx context.Context, pastOffenderIDs []int64) {
+// handlePastOffenders detects and updates users who became clean to past offender status.
+func (c *UserChecker) handlePastOffenders(
+	ctx context.Context,
+	users []*types.ReviewUser,
+	existingUsers map[int64]*types.ReviewUser,
+	reasonsMap map[int64]types.Reasons[enum.UserReasonType],
+) {
+	// Check if no existing users to check against
+	if len(existingUsers) == 0 {
+		return
+	}
+
+	// Detect past offenders (users who were previously flagged/confirmed but now have no violations)
+	pastOffenderIDs := make([]int64, 0)
+
+	for _, user := range users {
+		if _, hasReasons := reasonsMap[user.ID]; !hasReasons {
+			if existingUser, exists := existingUsers[user.ID]; exists {
+				if existingUser.Status == enum.UserTypeFlagged || existingUser.Status == enum.UserTypeConfirmed {
+					pastOffenderIDs = append(pastOffenderIDs, user.ID)
+					c.logger.Info("User became clean, will update to past offender",
+						zap.Int64("userID", user.ID),
+						zap.String("previousStatus", existingUser.Status.String()))
+				}
+			}
+		}
+	}
+
+	// Check if no past offenders detected
 	if len(pastOffenderIDs) == 0 {
 		return
 	}
 
+	// Update database
 	if err := c.db.Service().User().UpdateToPastOffender(ctx, pastOffenderIDs); err != nil {
 		c.logger.Error("Failed to update users to past offender status", zap.Error(err))
 	} else {
@@ -406,6 +473,7 @@ func (c *UserChecker) handlePastOffenders(ctx context.Context, pastOffenderIDs [
 			zap.Int("count", len(pastOffenderIDs)))
 	}
 
+	// Update D1 database
 	if err := c.cfClient.UserFlags.UpdateToPastOffender(ctx, pastOffenderIDs); err != nil {
 		c.logger.Error("Failed to update D1 users to past offender status", zap.Error(err))
 	}
@@ -444,7 +512,7 @@ func (c *UserChecker) syncFlaggedUsersToD1(
 	ctx context.Context, flaggedUsers map[int64]*types.ReviewUser, confirmedUsers map[int64]*types.ReviewUser,
 ) {
 	if len(flaggedUsers) > 0 {
-		if err := c.cfClient.UserFlags.AddFlagged(ctx, flaggedUsers); err != nil {
+		if err := c.cfClient.UserFlags.AddUsersWithStatus(ctx, flaggedUsers); err != nil {
 			c.logger.Error("Failed to add flagged users to D1", zap.Error(err))
 		}
 	}
@@ -594,7 +662,7 @@ func (c *UserChecker) trackFavoriteGames(ctx context.Context, flaggedUsers map[i
 
 // meetsAutoConfirmationCriteria validates eligibility for automatic user confirmation.
 func (c *UserChecker) meetsAutoConfirmationCriteria(user *types.ReviewUser) bool {
-	if user.Confidence < 0.90 || user.Reasons == nil || len(user.Reasons) < 2 {
+	if user.Status != enum.UserTypeFlagged || user.Confidence < 0.90 || user.Reasons == nil || len(user.Reasons) < 2 {
 		return false
 	}
 

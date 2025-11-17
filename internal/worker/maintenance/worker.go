@@ -286,6 +286,13 @@ func (w *Worker) processLockedGroups(ctx context.Context) {
 			return
 		}
 
+		if err := w.cfClient.GroupFlags.UpdateBanStatus(ctx, lockedGroupIDs, true); err != nil {
+			w.logger.Error("Error updating locked groups in D1", zap.Error(err))
+			w.reporter.SetHealthy(false)
+
+			return
+		}
+
 		w.logger.Info("Marked locked groups", zap.Int("count", len(lockedGroupIDs)))
 	}
 
@@ -294,6 +301,13 @@ func (w *Worker) processLockedGroups(ctx context.Context) {
 		err = w.db.Model().Group().MarkGroupsLockStatus(ctx, unlockedGroupIDs, false)
 		if err != nil {
 			w.logger.Error("Error unmarking locked groups", zap.Error(err))
+			w.reporter.SetHealthy(false)
+
+			return
+		}
+
+		if err := w.cfClient.GroupFlags.UpdateBanStatus(ctx, unlockedGroupIDs, false); err != nil {
+			w.logger.Error("Error updating unlocked groups in D1", zap.Error(err))
 			w.reporter.SetHealthy(false)
 
 			return

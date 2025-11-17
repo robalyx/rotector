@@ -310,6 +310,7 @@ func queueUserBatch(ctx context.Context, app *setup.App, batch []int64, logger *
 
 	// Queue the remaining users in D1 if any
 	queueErrors := make(map[int64]error)
+
 	if len(usersToQueue) > 0 {
 		var err error
 
