@@ -82,6 +82,7 @@ func (s *GroupService) GetGroupToReview(
 
 	// Determine target status based on mode
 	var targetStatus enum.GroupType
+
 	switch targetMode {
 	case enum.ReviewTargetModeFlagged:
 		targetStatus = enum.GroupTypeFlagged
@@ -97,6 +98,7 @@ func (s *GroupService) GetGroupToReview(
 		if errors.Is(err, types.ErrNoGroupsToReview) {
 			// If no groups found with primary status, try other statuses in order
 			var fallbackStatuses []enum.GroupType
+
 			switch targetMode {
 			case enum.ReviewTargetModeFlagged:
 				fallbackStatuses = []enum.GroupType{enum.GroupTypeConfirmed, enum.GroupTypeMixed}

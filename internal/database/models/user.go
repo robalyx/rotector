@@ -1714,6 +1714,7 @@ func (r *UserModel) GetUsersFavorites(ctx context.Context, userIDs []int64) (map
 
 	// Group by user ID
 	result := make(map[int64][]*apiTypes.Game)
+
 	for _, userFavorite := range userFavorites {
 		if userFavorite.Game == nil {
 			continue
@@ -1758,6 +1759,7 @@ func (r *UserModel) GetUsersGames(ctx context.Context, userIDs []int64) (map[int
 
 	// Group by user ID
 	result := make(map[int64][]*apiTypes.Game)
+
 	for _, userGame := range userGames {
 		if userGame.Game == nil {
 			continue

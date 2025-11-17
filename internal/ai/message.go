@@ -35,7 +35,7 @@ type FlaggedMessage struct {
 // FlaggedMessageUser contains information about a user with inappropriate messages.
 type FlaggedMessageUser struct {
 	Reason     string           `json:"reason"     jsonschema:"required,minLength=1,description=Overall reason for flagging this user"`
-	Messages   []FlaggedMessage `json:"messages"   jsonschema:"required,maxItems=100,description=List of inappropriate messages from this user"`
+	Messages   []FlaggedMessage `json:"messages"   jsonschema:"required,description=List of inappropriate messages from this user"`
 	Confidence float64          `json:"confidence" jsonschema:"required,minimum=0,maximum=1,description=Overall confidence score for user violations"`
 }
 
@@ -200,13 +200,11 @@ func (a *MessageAnalyzer) processMessageBatch(
 				},
 			},
 		},
-		Model:       a.model,
-		Temperature: openai.Float(0.0),
-		TopP:        openai.Float(0.95),
+		Model:               a.model,
+		Temperature:         openai.Float(0.0),
+		TopP:                openai.Float(0.95),
+		MaxCompletionTokens: openai.Int(8192),
 	}
-
-	// Configure extra fields for model
-	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).Build())
 
 	// Make API request
 	var result FlaggedMessageUser

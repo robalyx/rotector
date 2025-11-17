@@ -257,19 +257,22 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 			continue
 		}
 
+		// New accounts where ALL their groups are inappropriate
+		if userInfo.IsNewAccount() && totalInappropriate == len(userInfo.Groups) && len(userInfo.Groups) > 0 {
+			usersToAnalyze = append(usersToAnalyze, userInfo)
+			userConfidenceMap[userInfo.ID] = 0.6
+
+			continue
+		}
+
 		// Calculate confidence score
 		_, isInappropriateGroups := params.InappropriateGroupsFlags[userInfo.ID]
 		confidence := c.calculateConfidence(confirmedCount, flaggedCount, mixedCount, len(userInfo.Groups), isInappropriateGroups)
 
 		userConfidenceMap[userInfo.ID] = confidence
 
-		// Check if user meets group threshold
-		threshold := 0.5
-		if _, isInappropriateGroups := params.InappropriateGroupsFlags[userInfo.ID]; isInappropriateGroups {
-			threshold = 0.4
-		}
-
-		meetsGroupThreshold := confidence >= threshold
+		// Determine threshold
+		meetsGroupThreshold := confidence >= 0.30
 
 		// Check friend requirement for users with insufficient group evidence
 		meetsFriendRequirement := c.evaluateFriendRequirement(userInfo, confirmedCount, flaggedCount, mixedCount, totalInappropriateFriends)

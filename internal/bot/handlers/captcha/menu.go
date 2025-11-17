@@ -83,15 +83,15 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 		return
 	}
 
-	userDigits := make([]byte, 6)
+	userDigits := make([]byte, 0, 6)
 
-	for i, rn := range answer {
+	for _, rn := range answer {
 		if rn < '0' || rn > '9' {
 			ctx.Cancel("❌ Invalid answer. Please enter only digits.")
 			return
 		}
 
-		userDigits[i] = byte(rn - '0')
+		userDigits = append(userDigits, byte(rn-'0'))
 	}
 
 	// Compare answers

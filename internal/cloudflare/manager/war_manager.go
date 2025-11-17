@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/robalyx/rotector/internal/cloudflare/api"
@@ -109,7 +110,7 @@ func (w *WarManager) RemoveActiveTarget(ctx context.Context, userID int64, reaso
 // GetExpiredTargets returns targets that have expired (older than 24 hours).
 func (w *WarManager) GetExpiredTargets(ctx context.Context) ([]int64, error) {
 	sql := `
-		SELECT user_id FROM active_targets 
+		SELECT user_id FROM active_targets
 		WHERE is_active = 1 AND expires_at < datetime('now')
 	`
 
@@ -213,13 +214,13 @@ func (w *WarManager) UpdateMajorOrderProgress(ctx context.Context) error {
 
 		// Update major order progress and completion status
 		updateSQL := `
-			UPDATE major_orders SET 
+			UPDATE major_orders SET
 				current_value = ?,
-				is_active = CASE 
-					WHEN ? >= target_value THEN 0 
-					ELSE is_active 
+				is_active = CASE
+					WHEN ? >= target_value THEN 0
+					ELSE is_active
 				END,
-				completed_at = CASE 
+				completed_at = CASE
 					WHEN ? >= target_value AND completed_at IS NULL THEN datetime('now')
 					ELSE completed_at
 				END,
@@ -329,7 +330,7 @@ func (w *WarManager) IsFirstReporter(ctx context.Context, reportedUserID int64, 
 // UpdateExtensionReport updates an extension report's status and points awarded.
 func (w *WarManager) UpdateExtensionReport(ctx context.Context, reportID int64, status string, pointsAwarded int) error {
 	sql := `
-		UPDATE extension_reports 
+		UPDATE extension_reports
 		SET status = ?, points_awarded = ?, processed_at = datetime('now')
 		WHERE id = ?
 	`
@@ -345,7 +346,7 @@ func (w *WarManager) UpdateExtensionReport(ctx context.Context, reportID int64, 
 // AwardPointsToExtensionUser adds points to an extension user's total.
 func (w *WarManager) AwardPointsToExtensionUser(ctx context.Context, extensionUserUUID string, points int) error {
 	sql := `
-		UPDATE extension_users 
+		UPDATE extension_users
 		SET total_points = total_points + ?, last_active = datetime('now')
 		WHERE uuid = ?
 	`
@@ -362,7 +363,7 @@ func (w *WarManager) AwardPointsToExtensionUser(ctx context.Context, extensionUs
 func (w *WarManager) GetActiveMajorOrders(ctx context.Context) ([]MajorOrderInfo, error) {
 	sql := `
 		SELECT id, target_value, current_value, start_value
-		FROM major_orders 
+		FROM major_orders
 		WHERE is_active = 1 AND expires_at > datetime('now')
 	`
 
@@ -446,14 +447,20 @@ func (w *WarManager) RemoveUsersFromWarSystem(ctx context.Context, userIDs []int
 		inClause := ""
 
 		params := make([]any, len(batchUserIDs))
+
+		var inClausePlaceholders strings.Builder
+
 		for j, userID := range batchUserIDs {
 			if j > 0 {
-				inClause += ","
+				inClausePlaceholders.WriteString(",")
 			}
 
-			inClause += "?"
+			inClausePlaceholders.WriteString("?")
+
 			params[j] = userID
 		}
+
+		inClause += inClausePlaceholders.String()
 
 		// Remove active target assignments
 		activeTargetsQuery := "DELETE FROM active_targets WHERE user_id IN (" + inClause + ")"

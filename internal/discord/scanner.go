@@ -339,6 +339,9 @@ func (s *Scanner) AnalyzeAndFlagUser(
 		}
 	}
 
+	// Track whether inappropriate messages were found
+	foundInappropriateMessages := false
+
 	// Analyze messages from accessible mutual guilds
 	for _, guildID := range accessibleGuilds {
 		// Fetch messages for this guild
@@ -429,10 +432,26 @@ func (s *Scanner) AnalyzeAndFlagUser(
 				return fmt.Errorf("failed to flag roblox account: %w", err)
 			}
 
+			foundInappropriateMessages = true
+
 			break // Stop analyzing once we find inappropriate messages
 		}
 
 		time.Sleep(1 * time.Second)
+	}
+
+	// If no inappropriate messages found, add user as mixed type
+	if !foundInappropriateMessages {
+		s.logger.Info("User passed message analysis, adding as mixed type",
+			zap.Uint64("discordUserID", userID),
+			zap.Int64("robloxUserID", robloxUserID),
+			zap.Int("guild_count", guildCount))
+
+		confidence := 0.4
+
+		if err := s.flagRobloxAccount(ctx, userID, robloxUserID, guildCount, false, confidence, existingUser, fetchedUserInfo); err != nil {
+			return fmt.Errorf("failed to add user as mixed type: %w", err)
+		}
 	}
 
 	return nil
@@ -444,6 +463,18 @@ func (s *Scanner) flagRobloxAccount(
 	hasInappropriateMessages bool, confidence float64, existingUser *types.ReviewUser, fetchedUserInfo *types.User,
 ) error {
 	now := time.Now()
+
+	// Determine status based on guild count and message content
+	var status enum.UserType
+
+	switch {
+	case hasInappropriateMessages:
+		status = enum.UserTypeFlagged
+	case guildCount >= 3:
+		status = enum.UserTypeFlagged
+	default:
+		status = enum.UserTypeMixed
+	}
 
 	// Create reason message based on what was detected
 	var reasonMessage string
@@ -486,7 +517,7 @@ func (s *Scanner) flagRobloxAccount(
 		newUser := &types.User{
 			ID:            robloxUserID,
 			UUID:          uuid.New(),
-			Status:        enum.UserTypeFlagged,
+			Status:        status,
 			Confidence:    confidence,
 			EngineVersion: types.CurrentEngineVersion,
 			LastScanned:   now,
@@ -521,23 +552,39 @@ func (s *Scanner) flagRobloxAccount(
 	}
 
 	// Auto-confirm condo user
-	if err := s.db.Service().User().ConfirmUsers(ctx, []*types.ReviewUser{reviewUser}, 0); err != nil {
-		s.logger.Error("Failed to auto-confirm condo user",
-			zap.Int64("robloxUserID", robloxUserID),
-			zap.Error(err))
-	}
+	if status == enum.UserTypeFlagged {
+		if err := s.db.Service().User().ConfirmUsers(ctx, []*types.ReviewUser{reviewUser}, 0); err != nil {
+			s.logger.Error("Failed to auto-confirm condo user",
+				zap.Int64("robloxUserID", robloxUserID),
+				zap.Error(err))
+		}
 
-	// Sync to D1 database as confirmed
-	if err := s.cfClient.UserFlags.AddConfirmed(ctx, reviewUser, 0); err != nil {
-		s.logger.Error("Failed to add confirmed user to D1",
-			zap.Int64("robloxUserID", robloxUserID),
-			zap.Error(err))
-	}
+		// Sync to D1 database as confirmed
+		if err := s.cfClient.UserFlags.AddConfirmed(ctx, reviewUser, 0); err != nil {
+			s.logger.Error("Failed to add confirmed user to D1",
+				zap.Int64("robloxUserID", robloxUserID),
+				zap.Error(err))
+		}
 
-	s.logger.Info("Successfully flagged and confirmed Roblox account",
-		zap.Int64("robloxUserID", robloxUserID),
-		zap.String("reasonType", enum.UserReasonTypeCondo.String()),
-		zap.Float64("confidence", confidence))
+		s.logger.Info("Successfully flagged and confirmed Roblox account",
+			zap.Int64("robloxUserID", robloxUserID),
+			zap.String("status", status.String()),
+			zap.String("reasonType", enum.UserReasonTypeCondo.String()),
+			zap.Float64("confidence", confidence))
+	} else {
+		// Sync to D1 database as mixed
+		if err := s.cfClient.UserFlags.AddMixed(ctx, reviewUser); err != nil {
+			s.logger.Error("Failed to add mixed user to D1",
+				zap.Int64("robloxUserID", robloxUserID),
+				zap.Error(err))
+		}
+
+		s.logger.Info("Successfully flagged Roblox account as mixed",
+			zap.Int64("robloxUserID", robloxUserID),
+			zap.String("status", status.String()),
+			zap.String("reasonType", enum.UserReasonTypeCondo.String()),
+			zap.Float64("confidence", confidence))
+	}
 
 	return nil
 }
@@ -631,7 +678,11 @@ func calculateCondoConfidence(guildCount int) float64 {
 		return 0.90
 	case guildCount == 3:
 		return 0.85
-	default: // Below minimum threshold
+	case guildCount == 2:
+		return 0.40
+	case guildCount == 1:
+		return 0.30
+	default:
 		return 0.0
 	}
 }

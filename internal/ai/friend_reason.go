@@ -15,6 +15,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
@@ -32,13 +33,14 @@ const (
 type FriendSummary struct {
 	Name    string             `json:"name"    jsonschema:"required,minLength=1,description=Username of the friend"`
 	Type    string             `json:"type"    jsonschema:"required,enum=Confirmed,enum=Flagged,description=Type of friend (Confirmed or Flagged)"`
-	Reasons []types.ReasonInfo `json:"reasons" jsonschema:"required,maxItems=20,description=List of reasons with types and messages why this friend was flagged"`
+	Reasons []types.ReasonInfo `json:"reasons" jsonschema:"required,description=List of reasons with types and messages why this friend was flagged"`
 }
 
 // UserFriendData represents the data for a user's friend network.
 type UserFriendData struct {
-	Username string          `json:"username" jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
-	Friends  []FriendSummary `json:"friends"  jsonschema:"required,maxItems=100,description=List of friends and their violation data"`
+	Username       string          `json:"username"       jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Friends        []FriendSummary `json:"friends"        jsonschema:"required,description=List of friends and their violation data"`
+	PossibleVictim bool            `json:"possibleVictim" jsonschema:"description=True if this user may be a victim who was targeted or groomed"`
 }
 
 // UserFriendRequest contains the user data and friend network for analysis.
@@ -55,7 +57,7 @@ type FriendAnalysis struct {
 
 // BatchFriendAnalysis contains results for multiple users' friend networks.
 type BatchFriendAnalysis struct {
-	Results []FriendAnalysis `json:"results" jsonschema:"required,maxItems=50,description=Array of friend network analyses for each user"`
+	Results []FriendAnalysis `json:"results" jsonschema:"required,description=Array of friend network analyses for each user"`
 }
 
 // FriendReasonAnalyzer handles AI-based analysis of friend networks using OpenAI models.
@@ -138,8 +140,9 @@ func (a *FriendReasonAnalyzer) GenerateFriendReasons(
 		friendRequests[userInfo.ID] = UserFriendRequest{
 			UserInfo: userInfo,
 			UserData: UserFriendData{
-				Username: userInfo.Name,
-				Friends:  friendSummaries,
+				Username:       userInfo.Name,
+				Friends:        friendSummaries,
+				PossibleVictim: userInfo.Status == enum.UserTypeMixed,
 			},
 		}
 	}
@@ -306,13 +309,11 @@ func (a *FriendReasonAnalyzer) processFriendBatch(ctx context.Context, batch []U
 				},
 			},
 		},
-		Model:       a.model,
-		Temperature: openai.Float(0.0),
-		TopP:        openai.Float(0.4),
+		Model:               a.model,
+		Temperature:         openai.Float(0.0),
+		TopP:                openai.Float(0.4),
+		MaxCompletionTokens: openai.Int(8192),
 	}
-
-	// Configure extra fields for model
-	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).Build())
 
 	// Make API request
 	var result BatchFriendAnalysis

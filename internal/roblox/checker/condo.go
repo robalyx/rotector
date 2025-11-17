@@ -62,7 +62,7 @@ func (c *CondoChecker) ProcessUsers(ctx context.Context, params *CondoCheckerPar
 		// Check Discord server count
 		shouldFlag, serverCount, confidence := c.detectDiscordActivity(ctx, userInfo.ID)
 		if shouldFlag {
-			// User meets server threshold (3+), skip message analysis
+			// Build reason message
 			reasonMessage := fmt.Sprintf("Discord user with linked Roblox account detected in %d+ condo servers", serverCount)
 
 			if _, exists := params.ReasonsMap[userInfo.ID]; !exists {
@@ -139,7 +139,7 @@ func (c *CondoChecker) ProcessUsers(ctx context.Context, params *CondoCheckerPar
 		}
 
 		// Build reason message
-		reasonMessage := fmt.Sprintf("Member of %d confirmed condo groups", condoCount)
+		reasonMessage := fmt.Sprintf("Member of %d confirmed condo group(s).", condoCount)
 
 		// Calculate confidence based on number of condo groups
 		confidence := c.calculateGroupConfidence(condoCount)
@@ -173,7 +173,7 @@ func (c *CondoChecker) ProcessUsers(ctx context.Context, params *CondoCheckerPar
 }
 
 // detectDiscordActivity checks if a user should be flagged based on Discord server membership.
-// Returns true if user meets criteria (3+ servers), along with count and confidence.
+// Returns true if user meets criteria, along with count and confidence.
 func (c *CondoChecker) detectDiscordActivity(
 	ctx context.Context, robloxUserID int64,
 ) (shouldFlag bool, serverCount int, confidence float64) {
@@ -187,10 +187,9 @@ func (c *CondoChecker) detectDiscordActivity(
 		return false, 0, 0.0
 	}
 
-	// Check if user meets threshold (3+ servers)
-	if count >= 3 {
+	// Check if user meets threshold
+	if count >= 1 {
 		confidence = c.calculateDiscordConfidence(count)
-
 		return true, count, confidence
 	}
 
@@ -244,6 +243,9 @@ func (c *CondoChecker) detectGroupActivity(
 		} else {
 			details = fmt.Sprintf("Found %d condo groups", condoCount)
 		}
+	} else if condoCount >= 1 {
+		shouldFlag = true
+		details = fmt.Sprintf("Found %d condo group(s)", condoCount)
 	}
 
 	return shouldFlag, condoCount, details
@@ -294,6 +296,10 @@ func (c *CondoChecker) calculateDiscordConfidence(serverCount int) float64 {
 		return 0.90
 	case serverCount == 3:
 		return 0.85
+	case serverCount == 2:
+		return 0.40
+	case serverCount == 1:
+		return 0.30
 	default:
 		return 0.0
 	}
@@ -310,6 +316,8 @@ func (c *CondoChecker) calculateGroupConfidence(condoCount int) float64 {
 		return 0.85
 	case condoCount >= 2:
 		return 0.75
+	case condoCount == 1:
+		return 0.35
 	default:
 		// This should not be reached for valid flagged users
 		c.logger.Warn("Unexpected condo group count for confidence calculation",

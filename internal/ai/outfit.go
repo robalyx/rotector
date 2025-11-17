@@ -51,7 +51,7 @@ type OutfitAnalyzerParams struct {
 // OutfitThemeAnalysis contains the AI's theme detection results for a user's outfits.
 type OutfitThemeAnalysis struct {
 	Username      string        `json:"username"      jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
-	Themes        []OutfitTheme `json:"themes"        jsonschema:"required,maxItems=20,description=List of themes detected in the outfits"`
+	Themes        []OutfitTheme `json:"themes"        jsonschema:"required,description=List of themes detected in the outfits"`
 	HasFurryTheme bool          `json:"hasFurryTheme" jsonschema:"required,description=Whether any outfit has furry themes"`
 }
 
@@ -521,13 +521,11 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 				},
 			},
 		},
-		Model:       a.model,
-		Temperature: openai.Float(0.0),
-		TopP:        openai.Float(0.1),
+		Model:               a.model,
+		Temperature:         openai.Float(0.0),
+		TopP:                openai.Float(0.1),
+		MaxCompletionTokens: openai.Int(8192),
 	}
-
-	// Configure extra fields for model
-	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).Build())
 
 	// Make API request
 	var analysis OutfitThemeAnalysis

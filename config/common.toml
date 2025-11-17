@@ -121,8 +121,12 @@ password = ""
 
 [common.openai]
 # OpenAI API configuration
-base_url = "https://ai-gateway.vercel.sh/v1"
-api_key = ""
+base_url = ""
+# Username for HTTP Basic Auth
+username = ""
+# Password for HTTP Basic Auth
+password = ""
+# Maximum concurrent requests
 max_concurrent = 100
 
 # Model to use for user analysis
@@ -165,7 +169,7 @@ message_fallback_model = "gpt-5-mini"
 
 # Model mappings for the provider
 [common.openai.model_mappings]
-"gemini-2.5-flash" = "google/gemini-2.5-flash"
+"gemini-2.5-flash" = "vertex/google/gemini-2.5-flash-preview-09-2025"
 "grok-4-fast" = "xai/grok-4-fast-non-reasoning"
 "gpt-5-mini" = "openai/gpt-5-mini"
 

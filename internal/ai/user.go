@@ -12,6 +12,7 @@ import (
 	"github.com/alpkeskin/gotoon"
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/shared"
 	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
@@ -55,18 +56,19 @@ type UserSummary struct {
 
 // FlaggedUsers holds a list of users that the AI has identified as inappropriate.
 type FlaggedUsers struct {
-	Users []FlaggedUser `json:"users" jsonschema:"maxItems=100,description=List of users that have been flagged for inappropriate content"`
+	Users []FlaggedUser `json:"users" jsonschema:"description=List of users that have been flagged for inappropriate content"`
 }
 
 // FlaggedUser contains the AI's analysis results for a single user.
 type FlaggedUser struct {
-	Name            string   `json:"name"                      jsonschema:"required,minLength=1,description=Username of the flagged account"`
-	Hint            string   `json:"hint"                      jsonschema:"required,minLength=1,description=Brief clinical description using safe terminology"`
-	Confidence      float64  `json:"confidence"                jsonschema:"required,minimum=0,maximum=1,description=Overall confidence score for the violations"`
-	HasSocials      bool     `json:"hasSocials"                jsonschema:"required,description=Whether the user's description has social media"`
-	FlaggedFields   []string `json:"flaggedFields,omitempty"   jsonschema:"maxItems=3,enum=displayName,enum=description,enum=username,description=Profile fields containing violations"`
-	LanguagePattern []string `json:"languagePattern,omitempty" jsonschema:"maxItems=10,description=Linguistic patterns detected"`
-	LanguageUsed    []string `json:"languageUsed,omitempty"    jsonschema:"maxItems=5,description=Languages or encodings detected in content"`
+	Name                    string  `json:"name"                              jsonschema:"required,minLength=1,description=Username of the flagged account"`
+	Hint                    string  `json:"hint"                              jsonschema:"required,minLength=1,description=Brief clinical description using safe terminology"`
+	Confidence              float64 `json:"confidence"                        jsonschema:"required,minimum=0,maximum=1,description=Overall confidence score for the violations"`
+	HasSocials              bool    `json:"hasSocials"                        jsonschema:"required,description=Whether the user's description has social media"`
+	HasUsernameViolation    bool    `json:"hasUsernameViolation,omitempty"    jsonschema:"description=Username contains violations"`
+	HasDisplayNameViolation bool    `json:"hasDisplayNameViolation,omitempty" jsonschema:"description=Display name contains violations"`
+	HasDescriptionViolation bool    `json:"hasDescriptionViolation,omitempty" jsonschema:"description=Description contains violations"`
+	LanguageUsed            string  `json:"languageUsed,omitempty"            jsonschema:"description=Primary language or encoding detected in content"`
 }
 
 // UserAnalyzer handles AI-based content analysis using OpenAI models.
@@ -235,13 +237,12 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 				},
 			},
 		},
-		Model:       a.model,
-		Temperature: openai.Float(0.0),
-		TopP:        openai.Float(0.2),
+		Model:               a.model,
+		Temperature:         openai.Float(0.0),
+		TopP:                openai.Float(0.2),
+		MaxCompletionTokens: openai.Int(8192),
+		ReasoningEffort:     shared.ReasoningEffortMedium,
 	}
-
-	// Configure extra fields for model
-	params.SetExtraFields(client.NewExtraFieldsSettings().ForModel(a.model).WithReasoning(2048).Build())
 
 	// Make API request
 	var result FlaggedUsers
@@ -526,13 +527,14 @@ func (a *UserAnalyzer) processAndCreateRequests(
 
 		// Create the user reason request
 		userReasonRequest := UserReasonRequest{
-			User:            &summary,
-			Confidence:      flaggedUser.Confidence,
-			Hint:            flaggedUser.Hint,
-			FlaggedFields:   flaggedUser.FlaggedFields,
-			LanguagePattern: flaggedUser.LanguagePattern,
-			LanguageUsed:    flaggedUser.LanguageUsed,
-			UserID:          originalInfo.ID,
+			User:                    &summary,
+			Confidence:              flaggedUser.Confidence,
+			Hint:                    flaggedUser.Hint,
+			HasUsernameViolation:    flaggedUser.HasUsernameViolation,
+			HasDisplayNameViolation: flaggedUser.HasDisplayNameViolation,
+			HasDescriptionViolation: flaggedUser.HasDescriptionViolation,
+			LanguageUsed:            flaggedUser.LanguageUsed,
+			UserID:                  originalInfo.ID,
 		}
 
 		// Check if this user should be skipped based on various conditions
@@ -555,9 +557,10 @@ func (a *UserAnalyzer) processAndCreateRequests(
 			zap.String("username", flaggedUser.Name),
 			zap.Float64("confidence", flaggedUser.Confidence),
 			zap.String("hint", flaggedUser.Hint),
-			zap.Strings("flaggedFields", flaggedUser.FlaggedFields),
-			zap.Strings("languagePattern", flaggedUser.LanguagePattern),
-			zap.Strings("languageUsed", flaggedUser.LanguageUsed))
+			zap.Bool("hasUsernameViolation", flaggedUser.HasUsernameViolation),
+			zap.Bool("hasDisplayNameViolation", flaggedUser.HasDisplayNameViolation),
+			zap.Bool("hasDescriptionViolation", flaggedUser.HasDescriptionViolation),
+			zap.String("languageUsed", flaggedUser.LanguageUsed))
 	}
 }
 

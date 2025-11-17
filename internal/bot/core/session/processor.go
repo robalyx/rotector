@@ -84,6 +84,7 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 
 		// Process map keys and values
 		result := make(map[string]any)
+
 		for _, key := range refValue.MapKeys() {
 			// Convert map keys to strings
 			var keyStr string

@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/robalyx/rotector/internal/cloudflare/api"
@@ -34,8 +35,9 @@ func (i *IPTracking) UpdateUserFlagged(ctx context.Context, userFlaggedStatus ma
 	params := make([]any, 0, len(userFlaggedStatus)*3) // *3 to account for CASE + WHERE params
 
 	// Add CASE statement for each user ID
+	var caseWhenBuilder strings.Builder
 	for userID, flagged := range userFlaggedStatus {
-		query += "WHEN ? THEN ? "
+		caseWhenBuilder.WriteString("WHEN ? THEN ? ")
 
 		params = append(params, userID)
 		if flagged {
@@ -45,6 +47,8 @@ func (i *IPTracking) UpdateUserFlagged(ctx context.Context, userFlaggedStatus ma
 		}
 	}
 
+	query += caseWhenBuilder.String()
+
 	query += "END WHERE user_id IN ("
 
 	// Add placeholders for WHERE clause
@@ -53,15 +57,19 @@ func (i *IPTracking) UpdateUserFlagged(ctx context.Context, userFlaggedStatus ma
 		userIDs = append(userIDs, userID)
 	}
 
+	var whereInPlaceholders strings.Builder
+
 	for i, userID := range userIDs {
 		if i > 0 {
-			query += ","
+			whereInPlaceholders.WriteString(",")
 		}
 
-		query += "?"
+		whereInPlaceholders.WriteString("?")
 
 		params = append(params, userID)
 	}
+
+	query += whereInPlaceholders.String()
 
 	query += ") AND user_flagged IS NULL" // Only update if not already set
 
@@ -81,7 +89,7 @@ func (i *IPTracking) UpdateUserFlagged(ctx context.Context, userFlaggedStatus ma
 func (i *IPTracking) Cleanup(ctx context.Context, retentionPeriod time.Duration) error {
 	// Remove IP tracking records older than retention period
 	cleanupQuery := `
-		DELETE FROM queue_ip_tracking 
+		DELETE FROM queue_ip_tracking
 		WHERE queued_at < ?
 	`
 

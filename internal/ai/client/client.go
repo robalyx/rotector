@@ -2,8 +2,10 @@ package client
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -24,6 +26,15 @@ var (
 	ErrResponseTruncated    = errors.New("response truncated at max_tokens limit")
 )
 
+// geminiSafetySettings defines safety thresholds for Gemini models.
+var geminiSafetySettings = []map[string]any{
+	{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF"},
+}
+
 // AIClient implements the Client interface.
 type AIClient struct {
 	client        *openai.Client
@@ -38,8 +49,13 @@ type AIClient struct {
 
 // NewClient creates a new AIClient.
 func NewClient(cfg *config.OpenAI, usageTracker *manager.AIUsage, logger *zap.Logger) (*AIClient, error) {
+	// Create OpenAI client
+	credentials := cfg.Username + ":" + cfg.Password
+	encodedCredentials := base64.StdEncoding.EncodeToString([]byte(credentials))
+	authHeader := "Basic " + encodedCredentials
+
 	client := openai.NewClient(
-		option.WithAPIKey(cfg.APIKey),
+		option.WithHeader("Authorization", authHeader),
 		option.WithBaseURL(cfg.BaseURL),
 		option.WithRequestTimeout(60*time.Second),
 		option.WithMaxRetries(0),
@@ -128,6 +144,24 @@ func (c *AIClient) trackUsage(ctx context.Context, modelName string, usage opena
 	}
 }
 
+// applyModelSettings applies model settings such as Gemini safety settings.
+func (c *AIClient) applyModelSettings(params *openai.ChatCompletionNewParams) {
+	if !strings.Contains(strings.ToLower(params.Model), "gemini") {
+		return
+	}
+
+	extraFields := map[string]any{
+		"safety_settings": geminiSafetySettings,
+		"providerOptions": map[string]any{
+			"gateway": map[string]any{
+				"only": []string{"vertex"},
+			},
+		},
+	}
+
+	params.SetExtraFields(extraFields)
+}
+
 // chatCompletions implements the ChatCompletions interface.
 type chatCompletions struct {
 	client *AIClient
@@ -142,6 +176,8 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 	} else {
 		return nil, fmt.Errorf("%w: %s", ErrNoProvidersAvailable, originalModel)
 	}
+
+	c.client.applyModelSettings(&params)
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
@@ -193,6 +229,8 @@ func (c *chatCompletions) NewWithRetry(
 	} else {
 		return fmt.Errorf("%w: %s", ErrNoProvidersAvailable, originalModel)
 	}
+
+	c.client.applyModelSettings(&params)
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
@@ -367,6 +405,8 @@ func (c *chatCompletions) NewStreaming(
 			nil, fmt.Errorf("%w: %s", ErrNoProvidersAvailable, originalModel),
 		)
 	}
+
+	c.client.applyModelSettings(&params)
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {

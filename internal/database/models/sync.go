@@ -326,6 +326,7 @@ func (m *SyncModel) GetFlaggedServerMembers(
 
 	// Convert to map of user ID to their guild info
 	result := make(map[uint64][]*types.UserGuildInfo)
+
 	for _, member := range flaggedMembers {
 		guildInfo := &types.UserGuildInfo{
 			ServerID:  member.ServerID,

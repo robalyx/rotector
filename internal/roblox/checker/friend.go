@@ -70,20 +70,34 @@ func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerP
 		confirmedCount := len(params.ConfirmedFriendsMap[userInfo.ID])
 		flaggedCount := len(params.FlaggedFriendsMap[userInfo.ID])
 
-		// For new accounts, count all flagged friends
+		// For new accounts, count all inappropriate friends
 		// For older accounts, filter out circular flagging cases
 		var effectiveFlaggedCount int
 		if userInfo.IsNewAccount() {
-			effectiveFlaggedCount = flaggedCount
+			effectiveFlaggedCount = confirmedCount + flaggedCount
 		} else {
 			effectiveFlaggedCount = c.countValidFlaggedFriends(params.FlaggedFriendsMap[userInfo.ID])
 		}
 
 		userFlaggedCountMap[userInfo.ID] = effectiveFlaggedCount
 
+		// New accounts where ALL their friends are inappropriate
+		if userInfo.IsNewAccount() && effectiveFlaggedCount == len(userInfo.Friends) && len(userInfo.Friends) > 0 {
+			usersToAnalyze = append(usersToAnalyze, userInfo)
+			userConfidenceMap[userInfo.ID] = 0.6
+
+			continue
+		}
+
 		// Calculate confidence score
 		_, isInappropriateFriends := params.InappropriateFriendsFlags[userInfo.ID]
-		confidence := c.calculateConfidence(confirmedCount, effectiveFlaggedCount, len(userInfo.Friends), isInappropriateFriends)
+
+		var confidence float64
+		if userInfo.IsNewAccount() {
+			confidence = c.calculateConfidence(effectiveFlaggedCount, 0, len(userInfo.Friends), isInappropriateFriends)
+		} else {
+			confidence = c.calculateConfidence(confirmedCount, effectiveFlaggedCount, len(userInfo.Friends), isInappropriateFriends)
+		}
 
 		userConfidenceMap[userInfo.ID] = confidence
 
@@ -106,17 +120,9 @@ func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerP
 			confidence = 1.0
 			userConfidenceMap[userInfo.ID] = confidence
 			usersToAnalyze = append(usersToAnalyze, userInfo)
-		} else {
-			// Determine threshold based on whether user is in inappropriate friends map
-			threshold := 0.50
-			if _, isInappropriateFriends := params.InappropriateFriendsFlags[userInfo.ID]; isInappropriateFriends {
-				threshold = 0.40
-			}
-
-			// Only process users that exceed threshold and have friends
-			if confidence >= threshold && len(userInfo.Friends) > 0 {
-				usersToAnalyze = append(usersToAnalyze, userInfo)
-			}
+		} else if confidence >= 0.30 && len(userInfo.Friends) > 0 {
+			// Process users that exceed mixed threshold and have friends
+			usersToAnalyze = append(usersToAnalyze, userInfo)
 		}
 	}
 
@@ -370,6 +376,11 @@ func (c *FriendChecker) countValidFlaggedFriends(flaggedFriends map[int64]*types
 	count := 0
 
 	for _, flaggedFriend := range flaggedFriends {
+		// Skip mixed users to prevent chain reaction
+		if flaggedFriend.Status == enum.UserTypeMixed {
+			continue
+		}
+
 		// Skip users with only friend reason
 		if len(flaggedFriend.Reasons) == 1 {
 			if _, hasOnlyFriendReason := flaggedFriend.Reasons[enum.UserReasonTypeFriend]; hasOnlyFriendReason {

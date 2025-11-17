@@ -106,3 +106,9 @@ r2_use_ssl = true
 upload_api_base = "https://api.roscoe.com"
 # Upload admin API token (different from D1/R2 API token)
 upload_admin_token = ""
+
+[worker.queue_rate_limiting]
+# Maximum number of users to process per time window
+max_users_per_window = 30
+# Time window duration for rate limiting
+window_duration = "30m"

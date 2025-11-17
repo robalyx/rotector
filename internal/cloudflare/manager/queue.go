@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/robalyx/rotector/internal/cloudflare/api"
@@ -70,10 +71,10 @@ func NewQueue(d1Client *api.D1Client, logger *zap.Logger) *Queue {
 func (q *Queue) GetNextBatch(ctx context.Context, batchSize int) (*UserBatch, error) {
 	// First, get the batch of users
 	selectQuery := `
-		SELECT user_id, inappropriate_outfit, inappropriate_profile, inappropriate_friends, inappropriate_groups 
-		FROM queued_users 
+		SELECT user_id, inappropriate_outfit, inappropriate_profile, inappropriate_friends, inappropriate_groups
+		FROM queued_users
 		WHERE processed = 0 AND processing = 0
-		ORDER BY queued_at ASC 
+		ORDER BY queued_at ASC
 		LIMIT ?
 	`
 
@@ -124,14 +125,20 @@ func (q *Queue) GetNextBatch(ctx context.Context, batchSize int) (*UserBatch, er
 	updateQuery := "UPDATE queued_users SET processing = 1 WHERE user_id IN ("
 
 	params := make([]any, len(userIDs))
+
+	var whereInPlaceholders strings.Builder
+
 	for i, id := range userIDs {
 		if i > 0 {
-			updateQuery += ","
+			whereInPlaceholders.WriteString(",")
 		}
 
-		updateQuery += "?"
+		whereInPlaceholders.WriteString("?")
+
 		params[i] = id
 	}
+
+	updateQuery += whereInPlaceholders.String()
 
 	updateQuery += ")"
 
@@ -160,8 +167,9 @@ func (q *Queue) MarkAsProcessed(ctx context.Context, userIDs []int64, flaggedUse
 	params = append(params, time.Now().Unix())
 
 	// Add CASE statement for each user ID
+	var caseWhenBuilder strings.Builder
 	for _, id := range userIDs {
-		query += "WHEN ? THEN ? "
+		caseWhenBuilder.WriteString("WHEN ? THEN ? ")
 
 		params = append(params, id)
 		if flaggedUsers != nil {
@@ -174,18 +182,24 @@ func (q *Queue) MarkAsProcessed(ctx context.Context, userIDs []int64, flaggedUse
 		params = append(params, 0)
 	}
 
+	query += caseWhenBuilder.String()
+
 	query += "END WHERE user_id IN ("
 
 	// Add placeholders for WHERE clause
+	var whereInPlaceholders strings.Builder
+
 	for i, id := range userIDs {
 		if i > 0 {
-			query += ","
+			whereInPlaceholders.WriteString(",")
 		}
 
-		query += "?"
+		whereInPlaceholders.WriteString("?")
 
 		params = append(params, id)
 	}
+
+	query += whereInPlaceholders.String()
 
 	query += ")"
 
@@ -201,7 +215,7 @@ func (q *Queue) MarkAsProcessed(ctx context.Context, userIDs []int64, flaggedUse
 func (q *Queue) GetStats(ctx context.Context) (*Stats, error) {
 	// Get total items and processing count
 	query := `
-		SELECT 
+		SELECT
 			COUNT(*) as total,
 			SUM(CASE WHEN processing = 1 THEN 1 ELSE 0 END) as processing,
 			SUM(CASE WHEN processed = 0 AND processing = 0 THEN 1 ELSE 0 END) as unprocessed
@@ -246,19 +260,25 @@ func (q *Queue) AddUsers(ctx context.Context, userIDs []int64) (map[int64]error,
 
 	// Check existing users and their cloudflare status
 	checkQuery := `
-		SELECT user_id, queued_at, processed 
-		FROM queued_users 
+		SELECT user_id, queued_at, processed
+		FROM queued_users
 		WHERE user_id IN (`
 
 	params := make([]any, len(userIDs))
+
+	var whereInPlaceholders strings.Builder
+
 	for i, id := range userIDs {
 		if i > 0 {
-			checkQuery += ","
+			whereInPlaceholders.WriteString(",")
 		}
 
-		checkQuery += "?"
+		whereInPlaceholders.WriteString("?")
+
 		params[i] = id
 	}
+
+	checkQuery += whereInPlaceholders.String()
 
 	checkQuery += ")"
 
@@ -269,6 +289,7 @@ func (q *Queue) AddUsers(ctx context.Context, userIDs []int64) (map[int64]error,
 
 	// Track which users need to be inserted vs updated
 	existingUsers := make(map[int64]float64) // user_id -> queued_at
+
 	for _, row := range result {
 		if userID, ok := row["user_id"].(float64); ok {
 			if queuedAt, ok := row["queued_at"].(float64); ok {
@@ -280,12 +301,12 @@ func (q *Queue) AddUsers(ctx context.Context, userIDs []int64) (map[int64]error,
 	// Prepare batch insert for new users
 	now := time.Now().Unix()
 	insertQuery := `
-		INSERT INTO queued_users (user_id, queued_at, processed, processing) 
+		INSERT INTO queued_users (user_id, queued_at, processed, processing)
 		VALUES `
 
 	updateQuery := `
-		UPDATE queued_users 
-		SET queued_at = ?, processed = 0, processing = 0 
+		UPDATE queued_users
+		SET queued_at = ?, processed = 0, processing = 0
 		WHERE user_id IN (`
 
 	var (
@@ -298,6 +319,8 @@ func (q *Queue) AddUsers(ctx context.Context, userIDs []int64) (map[int64]error,
 	cutoffTime := time.Now().AddDate(0, 0, -7).Unix()
 	errors := make(map[int64]error)
 
+	var insertValuesBuilder strings.Builder
+
 	for _, userID := range userIDs {
 		if queuedAt, exists := existingUsers[userID]; exists {
 			// Check if user was queued in the past 7 days
@@ -309,14 +332,16 @@ func (q *Queue) AddUsers(ctx context.Context, userIDs []int64) (map[int64]error,
 			updateParams = append(updateParams, userID)
 		} else {
 			if len(insertParams) > 0 {
-				insertQuery += ","
+				insertValuesBuilder.WriteString(",")
 			}
 
-			insertQuery += "(?, ?, 0, 0)"
+			insertValuesBuilder.WriteString("(?, ?, 0, 0)")
 
 			insertParams = append(insertParams, userID, now)
 		}
 	}
+
+	insertQuery += insertValuesBuilder.String()
 
 	// Execute insert for new users if any
 	if len(insertParams) > 0 {
@@ -327,13 +352,17 @@ func (q *Queue) AddUsers(ctx context.Context, userIDs []int64) (map[int64]error,
 
 	// Execute update for existing users if any
 	if len(updateParams) > 1 { // More than just the timestamp
+		var whereInPlaceholders strings.Builder
+
 		for i := range len(updateParams) - 1 {
 			if i > 0 {
-				updateQuery += ","
+				whereInPlaceholders.WriteString(",")
 			}
 
-			updateQuery += "?"
+			whereInPlaceholders.WriteString("?")
 		}
+
+		updateQuery += whereInPlaceholders.String()
 
 		updateQuery += ")"
 
@@ -349,8 +378,8 @@ func (q *Queue) AddUsers(ctx context.Context, userIDs []int64) (map[int64]error,
 func (q *Queue) Remove(ctx context.Context, userID int64) error {
 	// First check if the user is in an unprocessed state
 	query := `
-		SELECT processed, processing 
-		FROM queued_users 
+		SELECT processed, processing
+		FROM queued_users
 		WHERE user_id = ?
 	`
 
@@ -382,8 +411,8 @@ func (q *Queue) Remove(ctx context.Context, userID int64) error {
 // GetStatus retrieves the current status of a queued user.
 func (q *Queue) GetStatus(ctx context.Context, userID int64) (*Status, error) {
 	query := `
-		SELECT processing, processed, flagged, inappropriate_outfit 
-		FROM queued_users 
+		SELECT processing, processed, flagged, inappropriate_outfit
+		FROM queued_users
 		WHERE user_id = ?
 	`
 

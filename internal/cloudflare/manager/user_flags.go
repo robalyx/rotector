@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -44,9 +45,32 @@ func NewUserFlags(d1Client *api.D1Client, db database.Client, warManager *WarMan
 	}
 }
 
-// AddFlagged inserts flagged users into the user_flags table.
-func (u *UserFlags) AddFlagged(ctx context.Context, flaggedUsers map[int64]*types.ReviewUser) error {
-	return u.addUsers(ctx, flaggedUsers, enum.UserTypeFlagged, nil)
+// AddUsersWithStatus inserts users into the user_flags table using each user's actual status.
+func (u *UserFlags) AddUsersWithStatus(ctx context.Context, users map[int64]*types.ReviewUser) error {
+	if len(users) == 0 {
+		return nil
+	}
+
+	// Group users by their status
+	usersByStatus := make(map[enum.UserType]map[int64]*types.ReviewUser)
+
+	for userID, user := range users {
+		status := user.Status
+		if usersByStatus[status] == nil {
+			usersByStatus[status] = make(map[int64]*types.ReviewUser)
+		}
+
+		usersByStatus[status][userID] = user
+	}
+
+	// Process each status group
+	for status, statusUsers := range usersByStatus {
+		if err := u.addUsers(ctx, statusUsers, status, nil); err != nil {
+			return fmt.Errorf("failed to add users with status %s: %w", status.String(), err)
+		}
+	}
+
+	return nil
 }
 
 // AddConfirmed inserts or updates a confirmed user in the user_flags table.
@@ -58,6 +82,17 @@ func (u *UserFlags) AddConfirmed(ctx context.Context, user *types.ReviewUser, re
 	users := map[int64]*types.ReviewUser{user.ID: user}
 
 	return u.addUsers(ctx, users, enum.UserTypeConfirmed, &reviewerID)
+}
+
+// AddMixed inserts or updates a mixed user in the user_flags table.
+func (u *UserFlags) AddMixed(ctx context.Context, user *types.ReviewUser) error {
+	if user == nil {
+		return nil
+	}
+
+	users := map[int64]*types.ReviewUser{user.ID: user}
+
+	return u.addUsers(ctx, users, enum.UserTypeMixed, nil)
 }
 
 // Remove removes a user from the user_flags table.
@@ -100,14 +135,19 @@ func (u *UserFlags) RemoveBatch(ctx context.Context, userIDs []int64) error {
 		query := "DELETE FROM user_flags WHERE user_id IN ("
 		params := make([]any, len(batchUserIDs))
 
+		var whereInPlaceholders strings.Builder
+
 		for j, userID := range batchUserIDs {
 			if j > 0 {
-				query += ","
+				whereInPlaceholders.WriteString(",")
 			}
 
-			query += "?"
+			whereInPlaceholders.WriteString("?")
+
 			params[j] = userID
 		}
+
+		query += whereInPlaceholders.String()
 
 		query += ")"
 
@@ -143,15 +183,19 @@ func (u *UserFlags) UpdateBanStatus(ctx context.Context, userIDs []int64, isBann
 	params = append(params, time.Now().Unix())
 
 	// Add placeholders for WHERE clause
+	var whereInPlaceholders strings.Builder
+
 	for i, userID := range userIDs {
 		if i > 0 {
-			query += ","
+			whereInPlaceholders.WriteString(",")
 		}
 
-		query += "?"
+		whereInPlaceholders.WriteString("?")
 
 		params = append(params, userID)
 	}
+
+	query += whereInPlaceholders.String()
 
 	query += ")"
 
@@ -188,15 +232,19 @@ func (u *UserFlags) UpdateToPastOffender(ctx context.Context, userIDs []int64) e
 		params := make([]any, 0, len(batchUserIDs)+2)
 		params = append(params, enum.UserTypePastOffender, time.Now().Unix())
 
+		var whereInPlaceholders strings.Builder
+
 		for j, userID := range batchUserIDs {
 			if j > 0 {
-				query += ","
+				whereInPlaceholders.WriteString(",")
 			}
 
-			query += "?"
+			whereInPlaceholders.WriteString("?")
 
 			params = append(params, userID)
 		}
+
+		query += whereInPlaceholders.String()
 
 		query += ")"
 
@@ -221,18 +269,16 @@ func (u *UserFlags) addUsers(
 	}
 
 	// Fetch reviewer information if needed
-	var reviewerUsername, reviewerDisplayName string
-	if reviewerID != nil {
-		reviewerUsername = "Unknown"
-		reviewerDisplayName = "Unknown"
+	var reviewerUsername, reviewerDisplayName *string
 
+	if reviewerID != nil {
 		if reviewerInfos, err := u.db.Model().Reviewer().GetReviewerInfos(ctx, []uint64{*reviewerID}); err != nil {
 			u.logger.Warn("Failed to get reviewer info",
 				zap.Error(err),
 				zap.Uint64("reviewerID", *reviewerID))
 		} else if reviewerInfo, exists := reviewerInfos[*reviewerID]; exists {
-			reviewerUsername = reviewerInfo.Username
-			reviewerDisplayName = reviewerInfo.DisplayName
+			reviewerUsername = &reviewerInfo.Username
+			reviewerDisplayName = &reviewerInfo.DisplayName
 		}
 	}
 
@@ -285,6 +331,11 @@ func (u *UserFlags) addUsers(
 				isReportable = 1
 			}
 
+			isBanned := 0
+			if user.IsBanned {
+				isBanned = 1
+			}
+
 			if reviewerID != nil {
 				params = []any{
 					userID,
@@ -295,7 +346,7 @@ func (u *UserFlags) addUsers(
 					reviewerUsername,
 					reviewerDisplayName,
 					user.EngineVersion,
-					user.IsBanned,
+					isBanned,
 					isReportable,
 					int(user.Category),
 					currentTime,
@@ -310,7 +361,7 @@ func (u *UserFlags) addUsers(
 					nil,
 					nil,
 					user.EngineVersion,
-					user.IsBanned,
+					isBanned,
 					isReportable,
 					int(user.Category),
 					currentTime,
